@@ -20,6 +20,9 @@
     cuts: 'Menos cortes',
   };
 
+  const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+  const FONT_SCALES = [0.6, 0.8, 1, 1.25, 1.5, 2];
+
   const AUTO_CALC_LIMIT = 300; // acima disso o cálculo só roda pelo botão
 
   function defaultState() {
@@ -35,6 +38,11 @@
       showCuts: false,
       showEdges: true,
       showOffcuts: true,
+      showOrder: false,
+      zoom: 1,
+      fontScale: 1,
+      mono: false,
+      vertical: false,
       stocks: [{ id: uid(), name: 'MDF 18mm', length: 2750, width: 1840, qty: 5 }],
       pieces: [
         { id: uid(), name: 'Lateral', length: 720, width: 550, qty: 2, grain: 'length', edges: e(true, false, false, false) },
@@ -73,6 +81,8 @@
     st.pieces.forEach((p) => { if (p.stock && !stockIds.has(p.stock)) p.stock = ''; });
     if (!UNITS[st.unit]) st.unit = 'mm';
     if (!PRIORITIES[st.priority]) st.priority = 'waste';
+    if (!ZOOMS.includes(st.zoom)) st.zoom = 1;
+    if (!FONT_SCALES.includes(st.fontScale)) st.fontScale = 1;
     st.cloudId = typeof st.cloudId === 'string' ? st.cloudId : null;
     return st;
   }
@@ -325,6 +335,7 @@
     setTimeout(() => {
       try {
         lastResult = Optimizer.optimize(state);
+        steps.clear();
         renderResults();
       } catch (err) {
         console.error(err);
@@ -534,11 +545,13 @@
     const groups = groupSheets(res.sheets);
     html += panelStats(res, groups);
 
+    html += viewBar();
     html += `<div class="view-toggles no-print">
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
       <label class="check inline"><input type="checkbox" data-view="showEdges"${state.showEdges ? ' checked' : ''}><span>Fita de borda</span></label>
       <label class="check inline"><input type="checkbox" data-view="showOffcuts"${state.showOffcuts ? ' checked' : ''}><span>Sobras</span></label>
       <label class="check inline"><input type="checkbox" data-view="showCuts"${state.showCuts ? ' checked' : ''}><span>Linhas de corte</span></label>
+      <label class="check inline"><input type="checkbox" data-view="showOrder"${state.showOrder ? ' checked' : ''}><span>Ordem dos cortes</span></label>
     </div>`;
 
     html += '<div class="sheets">';
@@ -554,7 +567,8 @@
           <div class="sheet-eff"><span class="mono">${fmt(s.efficiency * 100)}%</span><small>aproveitamento</small></div>
           <button type="button" class="icon no-print" data-png="${gi}" title="Baixar imagem desta chapa" aria-label="Baixar imagem">⤓</button>
         </header>
-        <div class="svg-wrap">${Render.sheetSVG(s, state.pieces, { ...viewOpts(), key: gi })}</div>
+        <div class="svg-wrap">${sheetImage(s, gi)}</div>
+        ${state.showOrder ? stepper(s, gi) : ''}
         <ul class="parts-list">${partsSummary(s)}</ul>
         ${cutsTable(s, `cuts-${gi}`)}
       </article>`;
@@ -568,15 +582,105 @@
       if (previous.has(d.dataset.key)) d.open = previous.get(d.dataset.key);
     });
     box._groups = groups;
+    applyZoom();
+    groups.forEach((_, gi) => highlightStep(gi));
   }
 
   function viewOpts() {
-    return { showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts, showOffcuts: state.showOffcuts, unit: unit() };
+    return {
+      showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts,
+      showOffcuts: state.showOffcuts, showOrder: state.showOrder,
+      fontScale: state.fontScale, mono: state.mono, vertical: state.vertical, unit: unit(),
+    };
+  }
+
+  // ---------- Visualização das chapas ----------
+
+  const steps = new Map(); // passo a passo de cada chapa: 0 = todos os cortes
+
+  function sheetImage(s, gi) {
+    return Render.sheetSVG(s, state.pieces, { ...viewOpts(), key: gi, step: steps.get(gi) || 0 });
+  }
+
+  function viewBar() {
+    const seg = (key, options) => options.map(([val, label]) =>
+      `<button type="button" class="seg-btn${state[key] === val ? ' on' : ''}" data-set="${key}" data-val="${val}" aria-pressed="${state[key] === val}">${label}</button>`).join('');
+    return `<div class="viewbar no-print" role="toolbar" aria-label="Visualização das chapas">
+      <div class="vb-group">
+        <span class="vb-label">Zoom</span>
+        <button type="button" class="vb-btn" data-zoom="-1" aria-label="Diminuir zoom"${state.zoom <= ZOOMS[0] ? ' disabled' : ''}>−</button>
+        <span class="vb-val" id="zoomVal">${Math.round(state.zoom * 100)}%</span>
+        <button type="button" class="vb-btn" data-zoom="1" aria-label="Aumentar zoom"${state.zoom >= ZOOMS[ZOOMS.length - 1] ? ' disabled' : ''}>+</button>
+      </div>
+      <div class="vb-group">
+        <span class="vb-label">Letras</span>
+        <button type="button" class="vb-btn small-a" data-font="-1" aria-label="Diminuir letras"${state.fontScale <= FONT_SCALES[0] ? ' disabled' : ''}>A−</button>
+        <span class="vb-val">${Math.round(state.fontScale * 100)}%</span>
+        <button type="button" class="vb-btn" data-font="1" aria-label="Aumentar letras"${state.fontScale >= FONT_SCALES[FONT_SCALES.length - 1] ? ' disabled' : ''}>A+</button>
+      </div>
+      <div class="vb-group seg" role="group" aria-label="Cores">${seg('mono', [[false, 'Colorido'], [true, 'Sem cores']])}</div>
+      <div class="vb-group seg" role="group" aria-label="Orientação">${seg('vertical', [[false, '▭ Horizontal'], [true, '▯ Vertical']])}</div>
+    </div>`;
+  }
+
+  // O zoom só muda o tamanho das imagens, sem redesenhar.
+  function applyZoom() {
+    const z = state.zoom;
+    document.querySelectorAll('#results .svg-wrap svg').forEach((svg) => {
+      svg.style.width = `${z * 100}%`;
+      svg.style.maxHeight = `${z * 75}vh`;
+    });
+    const label = $('#zoomVal');
+    if (label) label.textContent = `${Math.round(z * 100)}%`;
+    const minus = $('#results [data-zoom="-1"]');
+    const plus = $('#results [data-zoom="1"]');
+    if (minus) minus.disabled = z <= ZOOMS[0];
+    if (plus) plus.disabled = z >= ZOOMS[ZOOMS.length - 1];
+  }
+
+  function nextIn(list, value, dir) {
+    const i = list.indexOf(value);
+    return list[Math.min(list.length - 1, Math.max(0, (i < 0 ? list.indexOf(1) : i) + dir))];
+  }
+
+  function stepper(s, gi) {
+    const n = s.cuts.length;
+    const k = steps.get(gi) || 0;
+    const label = k ? `Corte <strong>${k}</strong> de ${n}` : `Todos os cortes (${n})`;
+    return `<div class="stepper no-print" data-group="${gi}">
+      <span class="vb-label">Passo a passo</span>
+      <button type="button" class="vb-btn" data-step="-1" aria-label="Corte anterior">‹</button>
+      <span class="step-label">${label}</span>
+      <button type="button" class="vb-btn" data-step="1" aria-label="Próximo corte">›</button>
+      ${k ? '<button type="button" class="link" data-step="0">ver todos</button>' : ''}
+    </div>`;
+  }
+
+  // Destaca na tabela "Sequência de cortes" o corte do passo atual.
+  function highlightStep(gi) {
+    const card = $(`#results .sheet[data-group="${gi}"]`);
+    if (!card) return;
+    const k = steps.get(gi) || 0;
+    card.querySelectorAll('.cut-table tbody tr').forEach((tr, i) => tr.classList.toggle('current', k > 0 && i === k - 1));
+  }
+
+  function setStep(gi, dir) {
+    const g = $('#results')._groups[gi];
+    const n = g.sheet.cuts.length;
+    const k = steps.get(gi) || 0;
+    const next = dir === 0 ? 0 : (k + dir + n + 1) % (n + 1); // 0 = todos
+    steps.set(gi, next);
+    const card = $(`#results .sheet[data-group="${gi}"]`);
+    card.querySelector('.svg-wrap').innerHTML = sheetImage(g.sheet, gi);
+    card.querySelector('.stepper').outerHTML = stepper(g.sheet, gi);
+    applyZoom();
+    highlightStep(gi);
+    card.querySelector(`.stepper [data-step="${dir === 0 ? 1 : dir}"]`).focus();
   }
 
   async function downloadPng(gi) {
     const g = $('#results')._groups[gi];
-    const svg = Render.sheetSVG(g.sheet, state.pieces, { ...viewOpts(), key: 'png' + gi });
+    const svg = Render.sheetSVG(g.sheet, state.pieces, { ...viewOpts(), key: 'png' + gi, step: steps.get(gi) || 0 });
     await Render.svgToPng(svg, `${slug(state.name)}-chapa-${g.first}.png`);
   }
 
@@ -963,7 +1067,23 @@
     results.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
-      if (btn.dataset.panel) {
+      if (btn.dataset.zoom) {
+        state.zoom = nextIn(ZOOMS, state.zoom, +btn.dataset.zoom);
+        persist();
+        applyZoom();
+      } else if (btn.dataset.font) {
+        state.fontScale = nextIn(FONT_SCALES, state.fontScale, +btn.dataset.font);
+        persist();
+        renderResults();
+        results.querySelector(`[data-font="${btn.dataset.font}"]`).focus();
+      } else if (btn.dataset.set) {
+        state[btn.dataset.set] = btn.dataset.val === 'true';
+        persist();
+        renderResults();
+        results.querySelector(`[data-set="${btn.dataset.set}"][data-val="${btn.dataset.val}"]`).focus();
+      } else if (btn.dataset.step !== undefined) {
+        setStep(+btn.closest('.stepper').dataset.group, +btn.dataset.step);
+      } else if (btn.dataset.panel) {
         e.preventDefault(); // não abre/fecha o painel
         const n = lastResult.sheets.length;
         panelIndex = (panelIndex + +btn.dataset.panel + n) % n;

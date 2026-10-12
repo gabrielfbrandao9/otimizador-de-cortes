@@ -13,7 +13,8 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 - **Espessura da serra** (kerf) e **refilo** das bordas da chapa.
 - **Veio da madeira**: cada peça pode ser *livre* (pode girar), seguir o comprimento ou seguir a largura da chapa.
 - **Fita de borda**: clique nas bordas do mini-desenho de cada peça. O total em metros é calculado.
-- **Diagrama visual** com nomes, medidas, fita de borda e linhas de corte. Chapas iguais são agrupadas (×N).
+- **Diagrama visual** com nomes, medidas, fita de borda, sobras e linhas de corte. Chapas iguais são agrupadas (×N).
+- **Visualização**: zoom, tamanho das letras, colorido ou sem cores, horizontal ou vertical e **ordem dos cortes** com passo a passo.
 - **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes, metros de corte e de fita.
 - **Salvar e exportar**:
   - **projetos na nuvem** com login por Google ou e-mail, acessíveis de qualquer aparelho (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));

@@ -28,6 +28,18 @@
       client.auth.onAuthStateChange((event, session) => cb(session ? session.user : null, event));
     },
 
+    // Formas de login ativadas no Supabase ({ google: true, email: true, ... }) ou null se não der para saber.
+    async providers() {
+      if (!enabled) return null;
+      if (!this._providers) {
+        this._providers = fetch(cfg.supabaseUrl.replace(/\/$/, '') + '/auth/v1/settings', { headers: { apikey: cfg.supabaseKey } })
+          .then((r) => r.json())
+          .then((s) => s.external || null)
+          .catch(() => null);
+      }
+      return this._providers;
+    },
+
     async signInWithGoogle() {
       check(await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: redirectTo() } }));
     },

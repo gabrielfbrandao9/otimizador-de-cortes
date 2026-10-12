@@ -550,10 +550,14 @@
     p.classList.toggle('error', !!isError);
   }
 
-  function openLogin() {
-    $('#btnGoogle').hidden = !Cloud.loginGoogle;
-    $('#emailLogin').hidden = !Cloud.loginEmail;
-    $('#loginSep').hidden = !(Cloud.loginGoogle && Cloud.loginEmail);
+  async function openLogin() {
+    // Só mostra cada forma de login se ela estiver ligada no config.js E ativada no Supabase.
+    const active = await Cloud.providers();
+    const google = Cloud.loginGoogle && (!active || active.google !== false);
+    const email = Cloud.loginEmail && (!active || active.email !== false);
+    $('#btnGoogle').hidden = !google;
+    $('#emailLogin').hidden = !email;
+    $('#loginSep').hidden = !(google && email);
     loginMsg('');
     $('#dlgLogin').showModal();
   }

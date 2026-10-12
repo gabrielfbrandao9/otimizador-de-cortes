@@ -50,7 +50,7 @@
   /**
    * @param sheet  chapa do resultado do otimizador
    * @param pieces lista de peças do projeto
-   * @param o      { showLabels, showCuts, showEdges, key, unit }
+   * @param o      { showLabels, showCuts, showEdges, showOffcuts, key, unit }
    */
   function sheetSVG(sheet, pieces, o) {
     const { L, W } = sheet;
@@ -121,6 +121,18 @@
         s += textBlock(lines, p.x + p.w / 2, p.y + p.h / 2, fs, c.text, vertical);
       }
       s += '</g>';
+    }
+
+    // Sobras: contorno tracejado e medidas
+    if (o.showOffcuts && sheet.offcuts) {
+      for (const r of sheet.offcuts) {
+        s += `<g><title>Sobra — ${esc(fmt(r.w))} × ${esc(fmt(r.h))}${esc(u)}</title>`
+          + `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#ffffff" fill-opacity="0.35" stroke="#9c8a70" stroke-width="${sw}" stroke-dasharray="${base * 0.35} ${base * 0.25}"/>`;
+        const label = [`${fmt(r.w)} × ${fmt(r.h)}${u}`];
+        const { fs, vertical } = fitLabel(label, r.w, r.h, base * 0.9);
+        if (fs >= base * 0.28) s += textBlock(label, r.x + r.w / 2, r.y + r.h / 2, fs, '#6b5a45', vertical);
+        s += '</g>';
+      }
     }
 
     // Linhas de corte

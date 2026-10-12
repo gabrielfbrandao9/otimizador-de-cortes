@@ -34,6 +34,7 @@
       showLabels: true,
       showCuts: false,
       showEdges: true,
+      showOffcuts: true,
       stocks: [{ id: uid(), name: 'MDF 18mm', length: 2750, width: 1840, qty: 5 }],
       pieces: [
         { id: uid(), name: 'Lateral', length: 720, width: 550, qty: 2, grain: 'length', edges: e(true, false, false, false) },
@@ -507,6 +508,7 @@
     html += `<div class="view-toggles no-print">
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
       <label class="check inline"><input type="checkbox" data-view="showEdges"${state.showEdges ? ' checked' : ''}><span>Fita de borda</span></label>
+      <label class="check inline"><input type="checkbox" data-view="showOffcuts"${state.showOffcuts ? ' checked' : ''}><span>Sobras</span></label>
       <label class="check inline"><input type="checkbox" data-view="showCuts"${state.showCuts ? ' checked' : ''}><span>Linhas de corte</span></label>
     </div>`;
 
@@ -540,7 +542,7 @@
   }
 
   function viewOpts() {
-    return { showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts, unit: unit() };
+    return { showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts, showOffcuts: state.showOffcuts, unit: unit() };
   }
 
   async function downloadPng(gi) {

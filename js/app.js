@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { Optimizer, Store, Render } = window;
+  const { Optimizer, Store, Render, Cloud } = window;
   const { fmt, esc } = Render;
   const $ = (s, r = document) => r.querySelector(s);
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -60,12 +60,17 @@
       qty: x.qty ?? 1,
     }));
     if (!UNITS[st.unit]) st.unit = 'mm';
+    st.cloudId = typeof st.cloudId === 'string' ? st.cloudId : null;
     return st;
   }
 
   let state = normalize(Store.loadCurrent() || defaultState());
   let lastResult = null;
   let calcTimer = null;
+  let user = null;
+
+  const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   // ---------- Utilidades ----------
 
@@ -81,8 +86,13 @@
     Store.saveCurrent(state);
   }
 
+  function setStatus(text) {
+    $('#saveStatus').textContent = text;
+  }
+
   function changed({ rerender } = {}) {
     persist();
+    setStatus('Alterações não salvas');
     if (rerender) renderInputs();
     updateCounts();
     markStale();
@@ -373,29 +383,246 @@
 
   // ---------- Projetos ----------
 
-  function openProjects() {
+  // Dados do projeto sem o vínculo com a nuvem (para salvar/exportar).
+  function projectData() {
+    const { cloudId, ...data } = state;
+    return data;
+  }
+
+  async function save() {
+    let name = (state.name || '').trim();
+    if (!name) {
+      name = (prompt('Nome do projeto:') || '').trim();
+      if (!name) return;
+    }
+    state.name = name;
+    $('#projectName').value = name;
+
+    if (user) {
+      setStatus('Salvando…');
+      try {
+        state.cloudId = await Cloud.save(state.cloudId, name, projectData());
+        persist();
+        setStatus(`Salvo na nuvem às ${timeFmt.format(new Date())}`);
+        toast(`“${name}” salvo na nuvem`);
+      } catch (err) {
+        Store.saveProject(name, projectData());
+        setStatus('Erro ao salvar na nuvem');
+        toast(`Não foi possível salvar na nuvem (${err.message}). Uma cópia ficou neste navegador.`);
+      }
+      return;
+    }
+
+    if (!Store.saveProject(name, projectData())) {
+      toast('Não foi possível salvar (armazenamento do navegador indisponível)');
+      return;
+    }
+    setStatus(`Salvo neste navegador às ${timeFmt.format(new Date())}`);
+    toast(Cloud.enabled ? `“${name}” salvo neste navegador. Entre na sua conta para salvar na nuvem.` : `“${name}” salvo neste navegador`);
+  }
+
+  function renderLocalList() {
     const list = Store.listProjects();
     const ul = $('#projectList');
     if (!list.length) {
-      ul.innerHTML = '<li class="muted">Nenhum projeto salvo ainda. Use “Salvar” para guardar o projeto atual neste navegador.</li>';
-    } else {
-      const df = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-      ul.innerHTML = list.map((p) => `<li>
-        <div><strong>${esc(p.name)}</strong><small>${p.savedAt ? df.format(p.savedAt) : ''}</small></div>
-        <button type="button" class="btn" data-open="${esc(p.name)}">Abrir</button>
-        <button type="button" class="icon" data-del="${esc(p.name)}" aria-label="Excluir">×</button>
-      </li>`).join('');
+      ul.innerHTML = '<li class="muted">Nenhum projeto salvo neste navegador.</li>';
+      return;
     }
+    ul.innerHTML = list.map((p) => `<li>
+      <div><strong>${esc(p.name)}</strong><small>${p.savedAt ? dateFmt.format(p.savedAt) : ''}</small></div>
+      ${user ? `<button type="button" class="btn ghost" data-upload="${esc(p.name)}" title="Enviar uma cópia para a nuvem">Enviar p/ nuvem</button>` : ''}
+      <button type="button" class="btn" data-open="${esc(p.name)}">Abrir</button>
+      <button type="button" class="icon" data-del="${esc(p.name)}" aria-label="Excluir">×</button>
+    </li>`).join('');
+  }
+
+  async function renderCloudList() {
+    const section = $('#cloudSection');
+    section.hidden = !Cloud.enabled;
+    if (!Cloud.enabled) return;
+    const ul = $('#cloudList');
+    if (!user) {
+      ul.innerHTML = '<li class="muted"><div>Entre na sua conta para salvar projetos na nuvem e abri-los em qualquer aparelho.</div><button type="button" class="btn" data-act="login">Entrar</button></li>';
+      return;
+    }
+    ul.innerHTML = '<li class="muted">Carregando…</li>';
+    try {
+      const rows = await Cloud.list();
+      ul.innerHTML = rows.length
+        ? rows.map((r) => {
+          const current = r.id === state.cloudId;
+          return `<li${current ? ' class="current"' : ''}>
+            <div><strong>${esc(r.name)}</strong><small>${dateFmt.format(new Date(r.updated_at))}${current ? ' · aberto agora' : ''}</small></div>
+            <button type="button" class="btn" data-cloud-open="${esc(r.id)}">Abrir</button>
+            <button type="button" class="icon" data-cloud-del="${esc(r.id)}" data-name="${esc(r.name)}" aria-label="Excluir">×</button>
+          </li>`;
+        }).join('')
+        : '<li class="muted">Nenhum projeto na nuvem ainda. Clique em “Salvar” para enviar o projeto atual.</li>';
+    } catch (err) {
+      ul.innerHTML = `<li class="muted">Erro ao carregar: ${esc(err.message)}</li>`;
+    }
+  }
+
+  function openProjects() {
+    renderLocalList();
     $('#dlgProjects').showModal();
+    renderCloudList();
+  }
+
+  async function onProjectsClick(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const d = btn.dataset;
+    try {
+      if (d.open) {
+        const s = Store.loadProject(d.open);
+        $('#dlgProjects').close();
+        // Cópia local não fica vinculada a um projeto da nuvem.
+        if (s) loadState({ ...s, cloudId: null }, `“${d.open}” aberto`);
+      } else if (d.del) {
+        e.preventDefault();
+        if (confirm(`Excluir “${d.del}” deste navegador?`)) {
+          Store.deleteProject(d.del);
+          renderLocalList();
+        }
+      } else if (d.upload) {
+        e.preventDefault();
+        const s = Store.loadProject(d.upload);
+        if (!s) return;
+        btn.disabled = true;
+        const { cloudId, ...data } = normalize(s);
+        await Cloud.save(null, d.upload, data);
+        toast(`“${d.upload}” enviado para a nuvem`);
+        btn.disabled = false;
+        renderCloudList();
+      } else if (d.cloudOpen) {
+        btn.disabled = true;
+        const row = await Cloud.load(d.cloudOpen);
+        $('#dlgProjects').close();
+        loadState({ ...row.data, name: row.name, cloudId: row.id }, `“${row.name}” aberto da nuvem`);
+        setStatus('Aberto da nuvem');
+      } else if (d.cloudDel) {
+        e.preventDefault();
+        if (!confirm(`Excluir “${d.name}” da nuvem? Isso não pode ser desfeito.`)) return;
+        await Cloud.remove(d.cloudDel);
+        if (state.cloudId === d.cloudDel) { state.cloudId = null; persist(); }
+        toast('Projeto excluído da nuvem');
+        renderCloudList();
+      }
+    } catch (err) {
+      btn.disabled = false;
+      toast('Erro: ' + err.message);
+    }
   }
 
   function loadState(s, msg) {
     state = normalize(s);
     persist();
     renderInputs();
+    setStatus('');
     lastResult = null;
     calculate();
     if (msg) toast(msg);
+  }
+
+  // ---------- Conta ----------
+
+  function renderAccount() {
+    const box = $('#account');
+    box.hidden = !Cloud.enabled;
+    if (!Cloud.enabled) return;
+    if (!user) {
+      box.innerHTML = '<button type="button" class="btn" data-act="login">Entrar</button>';
+      return;
+    }
+    const email = user.email || 'Conectado';
+    const avatar = user.user_metadata && user.user_metadata.avatar_url;
+    box.innerHTML = `<span class="user" title="${esc(email)}">
+        ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc(email[0].toUpperCase())}</span>`}
+        <span class="user-email">${esc(email)}</span>
+      </span>
+      <button type="button" class="btn ghost" data-act="logout">Sair</button>`;
+  }
+
+  function loginMsg(text, isError) {
+    const p = $('#loginMsg');
+    p.textContent = text;
+    p.classList.toggle('error', !!isError);
+  }
+
+  function openLogin() {
+    $('#btnGoogle').hidden = !Cloud.loginGoogle;
+    $('#emailLogin').hidden = !Cloud.loginEmail;
+    $('#loginSep').hidden = !(Cloud.loginGoogle && Cloud.loginEmail);
+    loginMsg('');
+    $('#dlgLogin').showModal();
+  }
+
+  async function logout() {
+    try {
+      await Cloud.signOut();
+      toast('Você saiu da conta');
+    } catch (err) {
+      toast('Erro ao sair: ' + err.message);
+    }
+  }
+
+  function bindAccount() {
+    if (!Cloud.enabled) return;
+
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act="login"], [data-act="logout"]');
+      if (!btn) return;
+      e.preventDefault();
+      if (btn.dataset.act === 'logout') return logout();
+      if ($('#dlgProjects').open) $('#dlgProjects').close();
+      openLogin();
+    });
+
+    $('#btnGoogle').addEventListener('click', async () => {
+      loginMsg('Abrindo o Google…');
+      try {
+        await Cloud.signInWithGoogle(); // redireciona para o Google e volta para o site
+      } catch (err) {
+        loginMsg('Não foi possível entrar com Google: ' + err.message, true);
+      }
+    });
+
+    const sendEmail = async () => {
+      const email = $('#loginEmail').value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)) return loginMsg('Digite um e-mail válido.', true);
+      const btn = $('#btnEmail');
+      btn.disabled = true;
+      loginMsg('Enviando…');
+      try {
+        await Cloud.signInWithEmail(email);
+        loginMsg(`Pronto! Abra o link que enviamos para ${email} (confira também o spam).`);
+      } catch (err) {
+        loginMsg('Não foi possível enviar o link: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+    $('#btnEmail').addEventListener('click', sendEmail);
+    $('#loginEmail').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); sendEmail(); }
+    });
+
+    Cloud.onAuthChange((u, event) => {
+      const previous = user;
+      user = u;
+      renderAccount();
+      if (u && !previous && event === 'SIGNED_IN') {
+        if ($('#dlgLogin').open) $('#dlgLogin').close();
+        toast(`Conectado como ${u.email || 'usuário'}`);
+      }
+      if (!u && previous) {
+        state.cloudId = null;
+        persist();
+        setStatus('');
+      }
+      if ($('#dlgProjects').open) { renderLocalList(); renderCloudList(); }
+    });
   }
 
   // ---------- Arquivos ----------
@@ -413,7 +640,7 @@
   async function fileAction(kind) {
     try {
       if (kind === 'export-json') {
-        Store.download(`${slug(state.name)}.json`, JSON.stringify(state, null, 2), 'application/json');
+        Store.download(`${slug(state.name)}.json`, JSON.stringify(projectData(), null, 2), 'application/json');
       } else if (kind === 'export-csv') {
         Store.download(`${slug(state.name)}-pecas.csv`, Store.piecesToCSV(state.pieces), 'text/csv;charset=utf-8');
       } else if (kind === 'import-json') {
@@ -421,7 +648,7 @@
         if (!f) return;
         const data = JSON.parse(await Store.readFile(f));
         if (!data || !Array.isArray(data.pieces)) throw new Error('arquivo não parece ser um projeto');
-        loadState(data, 'Projeto importado');
+        loadState({ ...data, cloudId: null }, 'Projeto importado');
       } else if (kind === 'import-csv') {
         const f = await pickFile('.csv,text/csv,.txt');
         if (!f) return;
@@ -453,7 +680,13 @@
       addPiece();
     });
 
-    $('#projectName').addEventListener('input', (e) => { state.name = e.target.value; persist(); });
+    $('#projectName').addEventListener('input', (e) => {
+      state.name = e.target.value;
+      persist();
+      setStatus('Alterações não salvas');
+      const title = $('.results-head h2');
+      if (title) title.textContent = state.name || 'Plano de corte';
+    });
     $('#optUnit').addEventListener('change', (e) => { state.unit = e.target.value; changed(); });
     $('#optKerf').addEventListener('input', (e) => { state.kerf = e.target.value === '' ? 0 : +e.target.value; changed(); });
     $('#optTrim').addEventListener('input', (e) => { state.trim = e.target.value === '' ? 0 : +e.target.value; changed(); });
@@ -473,28 +706,13 @@
         pieces: [{ id: uid(), name: '', length: '', width: '', qty: 1, grain: 'none', edges: {} }],
       });
     });
-    $('#btnSave').addEventListener('click', () => {
-      const name = (state.name || '').trim() || prompt('Nome do projeto:');
-      if (!name) return;
-      state.name = name;
-      $('#projectName').value = name;
-      toast(Store.saveProject(name, state) ? `“${name}” salvo neste navegador` : 'Não foi possível salvar (armazenamento indisponível)');
-    });
+    $('#btnSave').addEventListener('click', save);
     $('#btnOpen').addEventListener('click', openProjects);
-
-    $('#projectList').addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      if (btn.dataset.open) {
-        const s = Store.loadProject(btn.dataset.open);
-        $('#dlgProjects').close();
-        if (s) loadState(s, `“${btn.dataset.open}” aberto`);
-      } else if (btn.dataset.del) {
+    $('#dlgProjects').addEventListener('click', onProjectsClick);
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (confirm(`Excluir o projeto “${btn.dataset.del}”?`)) {
-          Store.deleteProject(btn.dataset.del);
-          openProjects();
-        }
+        save();
       }
     });
 
@@ -529,5 +747,7 @@
 
   renderInputs();
   bind();
+  renderAccount();
+  bindAccount();
   calculate();
 })();

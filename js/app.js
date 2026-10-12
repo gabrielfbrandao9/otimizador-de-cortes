@@ -57,6 +57,7 @@
       qty: p.qty ?? 1,
       grain: ['none', 'length', 'width'].includes(p.grain) ? p.grain : 'none',
       edges: Object.assign({ c1: false, c2: false, l1: false, l2: false }, p.edges || {}),
+      stock: typeof p.stock === 'string' ? p.stock : '',
     }));
     st.stocks = (Array.isArray(st.stocks) ? st.stocks : []).map((x) => ({
       id: x.id || uid(),
@@ -65,6 +66,8 @@
       width: x.width ?? '',
       qty: x.qty ?? 1,
     }));
+    const stockIds = new Set(st.stocks.map((x) => x.id));
+    st.pieces.forEach((p) => { if (p.stock && !stockIds.has(p.stock)) p.stock = ''; });
     if (!UNITS[st.unit]) st.unit = 'mm';
     if (!PRIORITIES[st.priority]) st.priority = 'waste';
     st.cloudId = typeof st.cloudId === 'string' ? st.cloudId : null;
@@ -126,6 +129,17 @@
     return `<input type="number" data-f="${field}" value="${esc(value)}" min="0" step="any" inputmode="decimal" ${extra}>`;
   }
 
+  function stockLabel(s, i) {
+    const size = +s.length > 0 && +s.width > 0 ? ` (${fmt(+s.length)}×${fmt(+s.width)})` : '';
+    return `${s.name || `Chapa ${i + 1}`}${size}`;
+  }
+
+  function stockSelect(p) {
+    const opts = state.stocks.map((s, i) =>
+      `<option value="${esc(s.id)}"${p.stock === s.id ? ' selected' : ''}>${esc(stockLabel(s, i))}</option>`).join('');
+    return `<select data-f="stock" aria-label="Chapa"><option value="">Qualquer</option>${opts}</select>`;
+  }
+
   function pieceRow(p, i) {
     const c = Render.pieceColor(i);
     const e = p.edges;
@@ -144,6 +158,7 @@
           <option value="width"${p.grain === 'width' ? ' selected' : ''}>↕ Larg.</option>
         </select>
       </td>
+      <td class="c-stock">${stockSelect(p)}</td>
       <td class="c-edge">
         <div class="edgebox" role="group" aria-label="Fita de borda">
           ${edgeBtn('c1', 'Comprimento 1 (cima)')}${edgeBtn('c2', 'Comprimento 2 (baixo)')}
@@ -164,8 +179,14 @@
     </tr>`;
   }
 
-  function renderInputs() {
+  function renderPieces() {
     $('#piecesBody').innerHTML = state.pieces.map(pieceRow).join('');
+    // Com uma chapa só não há o que escolher: esconde a coluna.
+    $('.grid.pieces').classList.toggle('one-stock', state.stocks.length < 2);
+  }
+
+  function renderInputs() {
+    renderPieces();
     $('#stocksBody').innerHTML = state.stocks.map(stockRow).join('');
     $('#projectName').value = state.name || '';
     $('#optUnit').value = state.unit;
@@ -193,6 +214,7 @@
       const item = find(el);
       if (!item || !el.dataset.f) return;
       item[el.dataset.f] = el.type === 'number' ? (el.value === '' ? '' : +el.value) : el.value;
+      if (list === 'stocks') renderPieces();
       changed();
     });
     body.addEventListener('change', (ev) => {
@@ -208,6 +230,7 @@
       if (!item) return;
       if (btn.dataset.act === 'del') {
         state[list] = state[list].filter((x) => x !== item);
+        if (list === 'stocks') state.pieces.forEach((p) => { if (p.stock === item.id) p.stock = ''; });
         changed({ rerender: true });
       } else if (btn.dataset.edge) {
         const k = btn.dataset.edge;
@@ -239,9 +262,11 @@
   }
 
   function addPiece() {
+    const prev = state.pieces[state.pieces.length - 1];
     state.pieces.push({
       id: uid(), name: '', length: '', width: '', qty: 1,
       grain: 'none', edges: { c1: false, c2: false, l1: false, l2: false },
+      stock: prev ? prev.stock : '',
     });
     changed({ rerender: true });
     focusLast('#piecesBody');
@@ -429,7 +454,7 @@
           const p = state.pieces[piece] || {};
           return `<li>${esc(p.name || `Peça ${piece + 1}`)} (${fmt(+p.length)} × ${fmt(+p.width)}) — ${count}</li>`;
         }).join('')
-        + '</ul><p>Aumente a quantidade de chapas ou confira se a peça é maior que a chapa (considerando refilo e veio).</p></div>';
+        + '</ul><p>Aumente a quantidade de chapas ou confira se a peça é maior que a chapa (considerando refilo, veio e a chapa escolhida para ela).</p></div>';
     }
 
     html += statsTable(res);
@@ -746,7 +771,7 @@
       if (kind === 'export-json') {
         Store.download(`${slug(state.name)}.json`, JSON.stringify(projectData(), null, 2), 'application/json');
       } else if (kind === 'export-csv') {
-        Store.download(`${slug(state.name)}-pecas.csv`, Store.piecesToCSV(state.pieces), 'text/csv;charset=utf-8');
+        Store.download(`${slug(state.name)}-pecas.csv`, Store.piecesToCSV(state.pieces, state.stocks), 'text/csv;charset=utf-8');
       } else if (kind === 'import-json') {
         const f = await pickFile('.json,application/json');
         if (!f) return;
@@ -760,7 +785,8 @@
         if (!pieces.length) throw new Error('nenhuma peça encontrada no CSV');
         const replace = state.pieces.every((p) => !p.length && !p.width) ||
           confirm(`Encontradas ${pieces.length} peças.\n\nOK = substituir a lista atual\nCancelar = adicionar ao final`);
-        const mapped = pieces.map((p) => ({ id: uid(), ...p }));
+        const byName = (n) => (state.stocks.find((s) => n && s.name.trim().toLowerCase() === n.trim().toLowerCase()) || {}).id || '';
+        const mapped = pieces.map(({ stockName, ...p }) => ({ id: uid(), ...p, stock: byName(stockName) }));
         state.pieces = replace ? mapped : state.pieces.concat(mapped);
         changed({ rerender: true });
         toast(`${pieces.length} peças importadas`);

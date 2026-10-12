@@ -34,7 +34,8 @@
   // Ordem de abertura de novas chapas: ordem da lista ou menor área primeiro.
   const STOCK_PICKS = ['order', 'area'];
 
-  function expandItems(pieces, considerGrain) {
+  // stockOf(p): índice da chapa obrigatória da peça, -1 = qualquer, -2 = chapa indisponível
+  function expandItems(pieces, considerGrain, stockOf) {
     const items = [];
     pieces.forEach((p, index) => {
       const L = +p.length;
@@ -47,7 +48,8 @@
       } else if (considerGrain && p.grain === 'width') {
         w = W; h = L; rotated = true; canRotate = false;
       }
-      for (let i = 0; i < q; i++) items.push({ piece: index, w, h, rotated, canRotate });
+      const stock = stockOf(p);
+      for (let i = 0; i < q; i++) items.push({ piece: index, w, h, rotated, canRotate, stock });
     });
     return items;
   }
@@ -63,6 +65,7 @@
     let best = null;
     const orientations = it.canRotate && it.w !== it.h ? 2 : 1;
     for (const sheet of sheets) {
+      if (it.stock !== -1 && sheet.stock !== it.stock) continue;
       for (let fi = 0; fi < sheet.free.length; fi++) {
         const f = sheet.free[fi];
         for (let o = 0; o < orientations; o++) {
@@ -148,7 +151,7 @@
     for (const it of items) {
       let best = findBest(sheets, it, strat.fit);
       if (!best) {
-        const si = order.find((i) => remaining[i] > 0 && fitsStock(stocks[i], it, trim));
+        const si = order.find((i) => (it.stock === -1 || i === it.stock) && remaining[i] > 0 && fitsStock(stocks[i], it, trim));
         if (si === undefined) { unplaced.push(it); continue; }
         remaining[si]--;
         const s = stocks[si];
@@ -219,6 +222,7 @@
     const stocks = input.stocks
       .map((s, index) => ({
         index,
+        id: s.id,
         name: s.name,
         length: +s.length,
         width: +s.width,
@@ -226,7 +230,11 @@
       }))
       .filter((s) => s.length > 2 * trim && s.width > 2 * trim && s.qty > 0);
 
-    const items = expandItems(input.pieces, !!input.considerGrain);
+    // A peça pode exigir uma chapa específica (pelo id da chapa).
+    const stockById = new Map();
+    stocks.forEach((s, i) => { if (s.id) stockById.set(s.id, i); });
+    const stockOf = (p) => (!p.stock ? -1 : stockById.has(p.stock) ? stockById.get(p.stock) : -2);
+    const items = expandItems(input.pieces, !!input.considerGrain, stockOf);
 
     let best = null, bestScore = null;
     if (stocks.length) {

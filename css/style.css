@@ -253,6 +253,8 @@ select:disabled { opacity: 0.45; }
 .grid .c-num { width: 82px; min-width: 74px; }
 .grid .c-qty { width: 58px; min-width: 52px; }
 .grid .c-grain { width: 92px; min-width: 86px; }
+.grid .c-stock { width: 120px; min-width: 110px; }
+.pieces.one-stock .c-stock { display: none; }
 .grid .c-edge { width: 50px; }
 .grid .c-del { width: 32px; }
 .grid th.c-num, .grid th.c-qty { text-align: right; padding-right: 9px; }

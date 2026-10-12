@@ -15,6 +15,7 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 - **Diagrama visual** com nomes, medidas, fita de borda e linhas de corte. Chapas iguais são agrupadas (×N).
 - **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes, metros de corte e de fita.
 - **Salvar e exportar**:
+  - **projetos na nuvem** com login por Google ou e-mail, acessíveis de qualquer aparelho (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));
   - salvamento automático e projetos nomeados no navegador (localStorage);
   - exportar e importar o projeto em `.json`;
   - exportar e importar a lista de peças em `.csv` (abre no Excel);
@@ -44,6 +45,12 @@ Depois acesse http://localhost:8000.
 3. No GitHub, vá em **Settings → Pages**. Em *Source*, escolha **Deploy from a branch**, depois a branch `main` e a pasta `/ (root)`.
 4. Em um ou dois minutos o site estará em `https://SEU-USUARIO.github.io/otimizador-de-cortes/`.
 
+## Salvar projetos na nuvem
+
+Por padrão os projetos ficam salvos só no navegador. Para ter login e projetos online,
+siga o passo a passo em **[SUPABASE.md](SUPABASE.md)** (gratuito, cerca de 15 minutos).
+Depois de configurado, aparece o botão **Entrar** no topo do site, e **Salvar** (ou Ctrl+S) envia o projeto para a nuvem.
+
 ## Formato do CSV de peças
 
 Separador `;` (padrão do Excel em português) ou `,`. A primeira linha pode ser um cabeçalho.
@@ -68,7 +75,10 @@ css/style.css       estilos (tema claro/escuro e impressão)
 js/optimizer.js     algoritmo de otimização (sem dependências)
 js/render.js        desenho das chapas em SVG e exportação PNG
 js/storage.js       localStorage, JSON e CSV
+js/config.js        endereço e chave do Supabase
+js/cloud.js         login e projetos na nuvem (Supabase)
 js/app.js           interface
+supabase/schema.sql tabela e regras de segurança do banco
 ```
 
 ## Limitações

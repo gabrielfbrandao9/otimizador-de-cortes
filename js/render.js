@@ -4,8 +4,14 @@
 (function (global) {
   'use strict';
 
-  const nf = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
-  const fmt = (n) => nf.format(n);
+  const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
+  const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Números inteiros sem casas decimais; os demais sempre com duas (12,50).
+  function fmt(n) {
+    const r = Math.round(n * 100) / 100;
+    return Number.isInteger(r) ? nf0.format(r) : nf2.format(r);
+  }
 
   const esc = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -44,7 +50,7 @@
   /**
    * @param sheet  chapa do resultado do otimizador
    * @param pieces lista de peças do projeto
-   * @param o      { showLabels, showCuts, showEdges, key }
+   * @param o      { showLabels, showCuts, showEdges, key, unit }
    */
   function sheetSVG(sheet, pieces, o) {
     const { L, W } = sheet;
@@ -55,10 +61,11 @@
     const pad = base * 0.5;
     const sw = M / 1100;
     const key = o.key || 'x';
+    const u = o.unit ? ` ${o.unit}` : '';
 
     let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padL} ${-padT} ${L + padL + pad} ${W + padT + pad}"`
       + ` font-family="IBM Plex Sans, Segoe UI, Arial, sans-serif" role="img"`
-      + ` aria-label="Plano de corte da chapa ${esc(fmt(L))} por ${esc(fmt(W))}">`;
+      + ` aria-label="Plano de corte da chapa ${esc(fmt(L))}${u} por ${esc(fmt(W))}${u}">`;
 
     s += `<defs><pattern id="hatch-${key}" patternUnits="userSpaceOnUse" width="${base * 0.8}" height="${base * 0.8}" patternTransform="rotate(45)">`
       + `<rect width="${base * 0.8}" height="${base * 0.8}" fill="#f1ebe1"/>`
@@ -73,8 +80,8 @@
       + `<line x1="${-base * 0.6}" y1="0" x2="${-base * 0.6}" y2="${W}"/>`
       + `<line x1="${-base * 0.9}" y1="0" x2="${-base * 0.3}" y2="0"/>`
       + `<line x1="${-base * 0.9}" y1="${W}" x2="${-base * 0.3}" y2="${W}"/></g>`;
-    s += `<text x="${L / 2}" y="${-base * 0.95}" font-size="${base}" fill="${dimColor}" text-anchor="middle">${esc(fmt(L))}</text>`;
-    s += `<text x="${-base * 0.95}" y="${W / 2}" font-size="${base}" fill="${dimColor}" text-anchor="middle" transform="rotate(-90 ${-base * 0.95} ${W / 2})">${esc(fmt(W))}</text>`;
+    s += `<text x="${L / 2}" y="${-base * 0.95}" font-size="${base}" fill="${dimColor}" text-anchor="middle">${esc(fmt(L) + u)}</text>`;
+    s += `<text x="${-base * 0.95}" y="${W / 2}" font-size="${base}" fill="${dimColor}" text-anchor="middle" transform="rotate(-90 ${-base * 0.95} ${W / 2})">${esc(fmt(W) + u)}</text>`;
 
     // Chapa (a área hachurada é sobra)
     s += `<rect x="0" y="0" width="${L}" height="${W}" fill="url(#hatch-${key})" stroke="#5c4a36" stroke-width="${sw * 2}"/>`;
@@ -87,7 +94,7 @@
       const piece = pieces[p.piece] || {};
       const c = pieceColor(p.piece);
       const name = piece.name || `Peça ${p.piece + 1}`;
-      const dims = `${fmt(+piece.length)} × ${fmt(+piece.width)}`;
+      const dims = `${fmt(+piece.length)} × ${fmt(+piece.width)}${u}`;
       s += `<g><title>${esc(name)} — ${esc(dims)}${p.rotated ? ' (girada)' : ''}</title>`;
       s += `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${sw * 1.5}"/>`;
 

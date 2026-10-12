@@ -130,7 +130,7 @@
   }
 
   function stockLabel(s, i) {
-    const size = +s.length > 0 && +s.width > 0 ? ` (${fmt(+s.length)}×${fmt(+s.width)})` : '';
+    const size = +s.length > 0 && +s.width > 0 ? ` (${fmt(+s.length)}×${fmt(+s.width)} ${UNITS[state.unit].label})` : '';
     return `${s.name || `Chapa ${i + 1}`}${size}`;
   }
 
@@ -194,7 +194,12 @@
     $('#optTrim').value = state.trim;
     $('#optGrain').checked = !!state.considerGrain;
     $('#optPriority').value = state.priority;
+    updateUnitLabels();
     updateCounts();
+  }
+
+  function updateUnitLabels() {
+    document.querySelectorAll('.u').forEach((el) => { el.textContent = UNITS[state.unit].label; });
   }
 
   function updateCounts() {
@@ -327,13 +332,15 @@
       .map(([i, n]) => {
         const p = state.pieces[i] || {};
         const c = Render.pieceColor(i);
-        return `<li><span class="dot" style="background:${c.swatch}"></span>${esc(p.name || `Peça ${i + 1}`)} <span class="mono">${fmt(+p.length)} × ${fmt(+p.width)}</span> <strong>×${n}</strong></li>`;
+        return `<li><span class="dot" style="background:${c.swatch}"></span>${esc(p.name || `Peça ${i + 1}`)} ${dims(+p.length, +p.width)} <strong>×${n}</strong></li>`;
       })
       .join('');
   }
 
   const pct = (x) => `${fmt(x * 100)}%`;
-  const dims = (w, h) => `<span class="mono">${fmt(w)} × ${fmt(h)}</span>`;
+  const unit = () => UNITS[state.unit].label;
+  const dims = (w, h) => `<span class="mono">${fmt(w)} × ${fmt(h)} ${unit()}</span>`;
+  const len = (v) => `${fmt(v)} ${unit()}`;
   const row = (label, value) => `<tr><th scope="row">${label}</th><td>${value}</td></tr>`;
 
   // Tabela "Estatísticas" do plano inteiro
@@ -359,8 +366,8 @@
         ${row('Cortes totais', st.cutCount)}
         ${row('Comprimento de corte total', `${fmt(st.cutLength / u.len)} ${u.lenU}`)}
         ${row('Fita de borda', `${fmt(st.edgeLength / u.len)} ${u.lenU}`)}
-        ${row('Espessura da serra', `${fmt(+state.kerf || 0)} ${u.label}`)}
-        ${row('Refilo', `${fmt(+state.trim || 0)} ${u.label}`)}
+        ${row('Espessura da serra', len(+state.kerf || 0))}
+        ${row('Refilo', len(+state.trim || 0))}
         ${row('Veio', state.considerGrain ? 'Respeitado' : 'Ignorado')}
         ${row('Prioridade de otimização', PRIORITIES[state.priority])}
       </table>
@@ -371,7 +378,7 @@
   function sheetStats(s) {
     const u = UNITS[state.unit];
     const waste = s.area - s.usedArea;
-    const list = s.offcuts.slice(0, 4).map((o) => `${fmt(o.w)}×${fmt(o.h)}`).join(', ');
+    const list = s.offcuts.slice(0, 4).map((o) => `${fmt(o.w)}×${fmt(o.h)} ${unit()}`).join(', ');
     const more = s.offcuts.length > 4 ? ` +${s.offcuts.length - 4}` : '';
     const item = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
     return `<dl class="sheet-stats">
@@ -400,7 +407,7 @@
     const rows = s.cuts.map((c, i) => `<tr>
         <td class="num">${i + 1}</td>
         <td>${dims(c.panel.w, c.panel.h)}</td>
-        <td class="mono">${c.axis}=${fmt(c.pos)}</td>
+        <td class="mono">${c.axis}=${len(c.pos)}</td>
         <td><div class="cut-res">${cutResult(c.a)}<span class="sep-bar">\\</span>${cutResult(c.b)}</div></td>
       </tr>`).join('');
     return `<details class="cuts" data-key="${key}">
@@ -432,7 +439,7 @@
     html += `<div class="results-head">
       <div>
         <h2>${esc(state.name || 'Plano de corte')}</h2>
-        <p class="muted">${st.partsPlaced} de ${st.partsTotal} peças · serra ${fmt(+state.kerf || 0)} ${u.label} · refilo ${fmt(+state.trim || 0)} ${u.label}</p>
+        <p class="muted">${st.partsPlaced} de ${st.partsTotal} peças · serra ${len(+state.kerf || 0)} · refilo ${len(+state.trim || 0)}</p>
       </div>
       <div class="results-actions no-print">
         <button type="button" class="btn" id="btnPrint">Imprimir / PDF</button>
@@ -443,7 +450,7 @@
     html += '<div class="stats">'
       + stat('Aproveitamento', `${fmt(st.efficiency * 100)}%`, `<span class="bar"><span style="width:${(st.efficiency * 100).toFixed(1)}%"></span></span>`)
       + stat('Chapas usadas', st.sheetCount)
-      + stat('Área de chapa', `${fmt(st.totalArea / u.area)} ${u.areaU}`, `peças ${fmt(st.usedArea / u.area)} · sobra ${fmt(st.wasteArea / u.area)}`)
+      + stat('Área de chapa', `${fmt(st.totalArea / u.area)} ${u.areaU}`, `peças ${fmt(st.usedArea / u.area)} ${u.areaU} · sobra ${fmt(st.wasteArea / u.area)} ${u.areaU}`)
       + stat('Cortes', st.cutCount, `${fmt(st.cutLength / u.len)} ${u.lenU} de corte`)
       + stat('Fita de borda', `${fmt(st.edgeLength / u.len)} ${u.lenU}`)
       + '</div>';
@@ -452,7 +459,7 @@
       html += '<div class="alert"><strong>Peças que não couberam:</strong><ul>'
         + res.unplaced.map(({ piece, count }) => {
           const p = state.pieces[piece] || {};
-          return `<li>${esc(p.name || `Peça ${piece + 1}`)} (${fmt(+p.length)} × ${fmt(+p.width)}) — ${count}</li>`;
+          return `<li>${esc(p.name || `Peça ${piece + 1}`)} (${fmt(+p.length)} × ${fmt(+p.width)} ${unit()}) — ${count}</li>`;
         }).join('')
         + '</ul><p>Aumente a quantidade de chapas ou confira se a peça é maior que a chapa (considerando refilo, veio e a chapa escolhida para ela).</p></div>';
     }
@@ -474,7 +481,7 @@
         <header>
           <div>
             <h3>${title}${g.count > 1 ? ` <span class="badge">×${g.count}</span>` : ''}</h3>
-            <p class="muted">${esc(s.name || 'Chapa')} · <span class="mono">${fmt(s.L)} × ${fmt(s.W)}</span> · ${s.parts.length} peças</p>
+            <p class="muted">${esc(s.name || 'Chapa')} · ${dims(s.L, s.W)} · ${s.parts.length} ${s.parts.length === 1 ? 'peça' : 'peças'}</p>
           </div>
           <div class="sheet-eff"><span class="mono">${fmt(s.efficiency * 100)}%</span><small>aproveitamento</small></div>
           <button type="button" class="icon no-print" data-png="${gi}" title="Baixar imagem desta chapa" aria-label="Baixar imagem">⤓</button>
@@ -497,7 +504,7 @@
   }
 
   function viewOpts() {
-    return { showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts };
+    return { showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts, unit: unit() };
   }
 
   async function downloadPng(gi) {
@@ -817,7 +824,12 @@
       const title = $('.results-head h2');
       if (title) title.textContent = state.name || 'Plano de corte';
     });
-    $('#optUnit').addEventListener('change', (e) => { state.unit = e.target.value; changed(); });
+    $('#optUnit').addEventListener('change', (e) => {
+      state.unit = e.target.value;
+      updateUnitLabels();
+      renderPieces(); // o seletor de chapa mostra as medidas com a unidade
+      changed();
+    });
     $('#optKerf').addEventListener('input', (e) => { state.kerf = e.target.value === '' ? 0 : +e.target.value; changed(); });
     $('#optTrim').addEventListener('input', (e) => { state.trim = e.target.value === '' ? 0 : +e.target.value; changed(); });
     $('#optGrain').addEventListener('change', (e) => {

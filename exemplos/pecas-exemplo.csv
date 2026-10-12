@@ -1,0 +1,7 @@
+nome;comprimento;largura;quantidade;veio;fita_c1;fita_c2;fita_l1;fita_l2
+Lateral;720;550;2;comprimento;1;0;0;0
+Base;764;550;2;comprimento;1;0;0;0
+Prateleira;762;500;2;comprimento;1;0;0;0
+Porta;716;397;4;comprimento;1;1;1;1
+Travessa;764;100;4;livre;0;0;0;0
+Gaveta frente;396;180;3;comprimento;1;1;1;1

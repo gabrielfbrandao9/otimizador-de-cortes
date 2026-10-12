@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Otimizador de Cortes</title>
+  <meta name="description" content="Calculadora gratuita de plano de corte para chapas de MDF, MDP, compensado, vidro e outros materiais. Funciona no navegador, sem cadastro.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='2' fill='%23b4532a'/%3E%3Cpath d='M14 6v20M14 15h16' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="2"/><path d="M14 6v20M14 15h16"/></svg>
+      <div>
+        <h1>Otimizador de Cortes</h1>
+        <p>Plano de corte para chapas</p>
+      </div>
+    </div>
+    <div class="project">
+      <input id="projectName" class="project-name" type="text" aria-label="Nome do projeto" placeholder="Nome do projeto">
+      <button type="button" class="btn" id="btnNew">Novo</button>
+      <button type="button" class="btn" id="btnSave">Salvar</button>
+      <button type="button" class="btn" id="btnOpen">Abrir</button>
+      <details class="dropdown">
+        <summary class="btn">Arquivo ▾</summary>
+        <div class="menu">
+          <button type="button" data-file="export-json">Exportar projeto (.json)</button>
+          <button type="button" data-file="import-json">Importar projeto (.json)</button>
+          <hr>
+          <button type="button" data-file="export-csv">Exportar peças (.csv)</button>
+          <button type="button" data-file="import-csv">Importar peças (.csv)</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="inputs">
+      <section class="card">
+        <div class="card-head">
+          <h2>Peças</h2>
+          <span class="muted" id="piecesCount"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid pieces">
+            <thead>
+              <tr>
+                <th class="c-n" aria-label="Número"></th>
+                <th>Nome</th>
+                <th class="c-num">Comp.</th>
+                <th class="c-num">Larg.</th>
+                <th class="c-qty">Qtd</th>
+                <th class="c-grain" title="Direção do veio da peça">Veio</th>
+                <th class="c-edge" title="Clique nas bordas para marcar fita de borda">Fita</th>
+                <th class="c-del" aria-label="Remover"></th>
+              </tr>
+            </thead>
+            <tbody id="piecesBody"></tbody>
+          </table>
+        </div>
+        <div class="card-actions">
+          <button type="button" class="btn" id="addPiece">+ Adicionar peça</button>
+          <button type="button" class="btn ghost" id="clearPieces">Limpar</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Chapas disponíveis</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="grid stocks">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th class="c-num">Comp.</th>
+                <th class="c-num">Larg.</th>
+                <th class="c-qty">Qtd</th>
+                <th class="c-del" aria-label="Remover"></th>
+              </tr>
+            </thead>
+            <tbody id="stocksBody"></tbody>
+          </table>
+        </div>
+        <div class="card-actions">
+          <button type="button" class="btn" id="addStock">+ Adicionar chapa</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Opções</h2></div>
+        <div class="options">
+          <label class="field">
+            <span>Unidade</span>
+            <select id="optUnit">
+              <option value="mm">Milímetros (mm)</option>
+              <option value="cm">Centímetros (cm)</option>
+              <option value="in">Polegadas (pol)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Espessura da serra</span>
+            <input id="optKerf" type="number" min="0" step="any" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span>Refilo (borda descartada)</span>
+            <input id="optTrim" type="number" min="0" step="any" inputmode="decimal">
+          </label>
+          <label class="check">
+            <input id="optGrain" type="checkbox">
+            <span>Respeitar o veio do material<small>O veio da chapa acompanha o comprimento. Peças com veio definido não serão giradas.</small></span>
+          </label>
+        </div>
+      </section>
+
+      <button type="button" class="btn primary big" id="btnCalc">Calcular plano de corte</button>
+    </aside>
+
+    <section class="results" id="results" aria-live="polite">
+      <div class="empty">
+        <p>Adicione as peças e as chapas e clique em <strong>Calcular plano de corte</strong>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Feito com HTML, CSS e JavaScript · os dados ficam salvos só no seu navegador.
+  </footer>
+
+  <dialog id="dlgProjects">
+    <form method="dialog" class="dlg">
+      <div class="dlg-head">
+        <h2>Projetos salvos</h2>
+        <button class="icon" value="close" aria-label="Fechar">×</button>
+      </div>
+      <ul id="projectList" class="project-list"></ul>
+    </form>
+  </dialog>
+
+  <input type="file" id="fileInput" hidden>
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="js/optimizer.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

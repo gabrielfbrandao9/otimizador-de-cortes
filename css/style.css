@@ -250,6 +250,10 @@ select:disabled { opacity: 0.45; }
 }
 .grid td { padding: 3px; vertical-align: middle; }
 .grid .c-n { width: 30px; }
+.grid .c-on { width: 26px; text-align: center; }
+.grid .c-on input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+.grid tr.off td:not(.c-on) { opacity: 0.4; }
+.grid tr.off input[type='text'] { text-decoration: line-through; }
 .grid .c-num { width: 82px; min-width: 74px; }
 .grid .c-qty { width: 58px; min-width: 52px; }
 .grid .c-grain { width: 92px; min-width: 86px; }

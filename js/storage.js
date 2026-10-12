@@ -73,9 +73,9 @@
   };
 
   // ---------- CSV ----------
-  // Colunas: nome;comprimento;largura;quantidade;veio;fita_c1;fita_c2;fita_l1;fita_l2;chapa
+  // Colunas: nome;comprimento;largura;quantidade;veio;fita_c1;fita_c2;fita_l1;fita_l2;chapa;ativa
 
-  const CSV_HEADER = ['nome', 'comprimento', 'largura', 'quantidade', 'veio', 'fita_c1', 'fita_c2', 'fita_l1', 'fita_l2', 'chapa'];
+  const CSV_HEADER = ['nome', 'comprimento', 'largura', 'quantidade', 'veio', 'fita_c1', 'fita_c2', 'fita_l1', 'fita_l2', 'chapa', 'ativa'];
   const GRAIN_TO_CSV = { none: 'livre', length: 'comprimento', width: 'largura' };
 
   function detectDelimiter(line) {
@@ -134,6 +134,7 @@
         grain: parseGrain(r[4]),
         edges: { c1: bool(r[5]), c2: bool(r[6]), l1: bool(r[7]), l2: bool(r[8]) },
         stockName: r[9] || '',
+        enabled: r[10] == null || r[10] === '' || bool(r[10]),
       }))
       .filter((p) => p.length > 0 && p.width > 0);
   }
@@ -150,7 +151,7 @@
       const e = p.edges || {};
       lines.push([
         p.name, p.length, p.width, p.qty, GRAIN_TO_CSV[p.grain] || 'livre',
-        e.c1 ? 1 : 0, e.c2 ? 1 : 0, e.l1 ? 1 : 0, e.l2 ? 1 : 0, stockName(p.stock),
+        e.c1 ? 1 : 0, e.c2 ? 1 : 0, e.l1 ? 1 : 0, e.l2 ? 1 : 0, stockName(p.stock), p.enabled === false ? 0 : 1,
       ].map(csvCell).join(';'));
     }
     return '﻿' + lines.join('\r\n');

@@ -9,6 +9,7 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 
 - **Otimização automática**: algoritmo guilhotina, em que cada corte atravessa a peça de ponta a ponta, como numa esquadrejadeira. O mesmo plano é calculado com mais de 200 combinações de heurísticas e o melhor é mantido.
 - **Várias chapas**: diferentes tamanhos e materiais, cada um com sua quantidade. Cada peça pode ser presa a uma chapa específica (coluna **Chapa**) ou ficar em *Qualquer*.
+- **Ativar e desativar** peças e chapas com uma caixa de seleção, sem precisar apagá-las.
 - **Espessura da serra** (kerf) e **refilo** das bordas da chapa.
 - **Veio da madeira**: cada peça pode ser *livre* (pode girar), seguir o comprimento ou seguir a largura da chapa.
 - **Fita de borda**: clique nas bordas do mini-desenho de cada peça. O total em metros é calculado.
@@ -65,6 +66,7 @@ Fundo;780;700;1;livre;0;0;0;0;HDF 3mm
 - `veio`: `livre`, `comprimento` ou `largura`.
 - `fita_*`: `1` (tem fita) ou `0`. `c1`/`c2` são as bordas do comprimento e `l1`/`l2` as da largura.
 - `chapa` (opcional): o nome de uma chapa cadastrada no projeto. Vazio = qualquer chapa.
+- `ativa` (opcional): `0` para importar a peça desativada. Vazio ou `1` = ativa.
 
 Há um exemplo em [`exemplos/pecas-exemplo.csv`](exemplos/pecas-exemplo.csv).
 

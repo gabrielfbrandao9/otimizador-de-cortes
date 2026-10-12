@@ -59,6 +59,7 @@
       grain: ['none', 'length', 'width'].includes(p.grain) ? p.grain : 'none',
       edges: Object.assign({ c1: false, c2: false, l1: false, l2: false }, p.edges || {}),
       stock: typeof p.stock === 'string' ? p.stock : '',
+      enabled: p.enabled !== false,
     }));
     st.stocks = (Array.isArray(st.stocks) ? st.stocks : []).map((x) => ({
       id: x.id || uid(),
@@ -66,6 +67,7 @@
       length: x.length ?? '',
       width: x.width ?? '',
       qty: x.qty ?? 1,
+      enabled: x.enabled !== false,
     }));
     const stockIds = new Set(st.stocks.map((x) => x.id));
     st.pieces.forEach((p) => { if (p.stock && !stockIds.has(p.stock)) p.stock = ''; });
@@ -137,7 +139,7 @@
 
   function stockSelect(p) {
     const opts = state.stocks.map((s, i) =>
-      `<option value="${esc(s.id)}"${p.stock === s.id ? ' selected' : ''}>${esc(stockLabel(s, i))}</option>`).join('');
+      `<option value="${esc(s.id)}"${p.stock === s.id ? ' selected' : ''}>${esc(stockLabel(s, i))}${s.enabled ? '' : ' (desativada)'}</option>`).join('');
     return `<select data-f="stock" aria-label="Chapa"><option value="">Qualquer</option>${opts}</select>`;
   }
 
@@ -146,7 +148,8 @@
     const e = p.edges;
     const edgeBtn = (k, label) =>
       `<button type="button" class="edge e-${k}${e[k] ? ' on' : ''}" data-edge="${k}" aria-pressed="${e[k]}" title="${label}"></button>`;
-    return `<tr data-id="${p.id}">
+    return `<tr data-id="${p.id}"${p.enabled ? '' : ' class="off"'}>
+      <td class="c-on">${enabledBox(p, 'Usar esta peça no cálculo')}</td>
       <td class="c-n"><span class="swatch" style="background:${c.swatch}">${i + 1}</span></td>
       <td><input type="text" data-f="name" value="${esc(p.name)}" placeholder="Peça ${i + 1}" aria-label="Nome"></td>
       <td class="c-num">${numInput('length', p.length, 'aria-label="Comprimento"')}</td>
@@ -170,8 +173,21 @@
     </tr>`;
   }
 
+  function enabledBox(item, label) {
+    return `<input type="checkbox" data-f="enabled"${item.enabled ? ' checked' : ''} aria-label="${label}" title="${label}">`;
+  }
+
+  // Caixa "todas" do cabeçalho: marcada, desmarcada ou parcial.
+  function syncAllBox(sel, list) {
+    const box = $(sel);
+    const on = list.filter((x) => x.enabled).length;
+    box.checked = list.length > 0 && on === list.length;
+    box.indeterminate = on > 0 && on < list.length;
+  }
+
   function stockRow(s) {
-    return `<tr data-id="${s.id}">
+    return `<tr data-id="${s.id}"${s.enabled ? '' : ' class="off"'}>
+      <td class="c-on">${enabledBox(s, 'Usar esta chapa no cálculo')}</td>
       <td><input type="text" data-f="name" value="${esc(s.name)}" placeholder="Material" aria-label="Material"></td>
       <td class="c-num">${numInput('length', s.length, 'aria-label="Comprimento"')}</td>
       <td class="c-num">${numInput('width', s.width, 'aria-label="Largura"')}</td>
@@ -184,11 +200,13 @@
     $('#piecesBody').innerHTML = state.pieces.map(pieceRow).join('');
     // Com uma chapa só não há o que escolher: esconde a coluna.
     $('.grid.pieces').classList.toggle('one-stock', state.stocks.length < 2);
+    syncAllBox('#allPieces', state.pieces);
   }
 
   function renderInputs() {
     renderPieces();
     $('#stocksBody').innerHTML = state.stocks.map(stockRow).join('');
+    syncAllBox('#allStocks', state.stocks);
     $('#projectName').value = state.name || '';
     $('#optUnit').value = state.unit;
     $('#optKerf').value = state.kerf;
@@ -204,8 +222,10 @@
   }
 
   function updateCounts() {
-    const total = state.pieces.reduce((t, p) => t + (Math.floor(+p.qty) || 0), 0);
-    $('#piecesCount').textContent = `${state.pieces.length} tipos · ${total} peças`;
+    const active = state.pieces.filter((p) => p.enabled);
+    const total = active.reduce((t, p) => t + (Math.floor(+p.qty) || 0), 0);
+    const off = state.pieces.length - active.length;
+    $('#piecesCount').textContent = `${active.length} tipos · ${total} peças${off ? ` · ${off} desativada${off > 1 ? 's' : ''}` : ''}`;
   }
 
   function bindTable(bodySel, list) {
@@ -218,13 +238,21 @@
     body.addEventListener('input', (ev) => {
       const el = ev.target;
       const item = find(el);
-      if (!item || !el.dataset.f) return;
+      if (!item || !el.dataset.f || el.type === 'checkbox') return;
       item[el.dataset.f] = el.type === 'number' ? (el.value === '' ? '' : +el.value) : el.value;
       if (list === 'stocks') renderPieces();
       changed();
     });
     body.addEventListener('change', (ev) => {
-      if (ev.target.tagName === 'SELECT') {
+      if (ev.target.type === 'checkbox' && ev.target.dataset.f === 'enabled') {
+        const item = find(ev.target);
+        if (!item) return;
+        item.enabled = ev.target.checked;
+        ev.target.closest('tr').classList.toggle('off', !item.enabled);
+        if (list === 'stocks') { renderPieces(); syncAllBox('#allStocks', state.stocks); }
+        else syncAllBox('#allPieces', state.pieces);
+        changed();
+      } else if (ev.target.tagName === 'SELECT') {
         const item = find(ev.target);
         if (item) { item[ev.target.dataset.f] = ev.target.value; changed(); }
       }
@@ -264,7 +292,7 @@
   function focusLast(bodySel) {
     const rows = $(bodySel).querySelectorAll('tr');
     const last = rows[rows.length - 1];
-    if (last) last.querySelector('input').focus();
+    if (last) last.querySelector('input[type="text"]').focus();
   }
 
   function addPiece() {
@@ -273,6 +301,7 @@
       id: uid(), name: '', length: '', width: '', qty: 1,
       grain: 'none', edges: { c1: false, c2: false, l1: false, l2: false },
       stock: prev ? prev.stock : '',
+      enabled: true,
     });
     changed({ rerender: true });
     focusLast('#piecesBody');
@@ -280,7 +309,7 @@
 
   function addStock() {
     const prev = state.stocks[state.stocks.length - 1];
-    state.stocks.push({ id: uid(), name: '', length: prev ? prev.length : '', width: prev ? prev.width : '', qty: 1 });
+    state.stocks.push({ id: uid(), name: '', length: prev ? prev.length : '', width: prev ? prev.width : '', qty: 1, enabled: true });
     changed({ rerender: true });
     focusLast('#stocksBody');
   }
@@ -831,7 +860,7 @@
         const replace = state.pieces.every((p) => !p.length && !p.width) ||
           confirm(`Encontradas ${pieces.length} peças.\n\nOK = substituir a lista atual\nCancelar = adicionar ao final`);
         const byName = (n) => (state.stocks.find((s) => n && s.name.trim().toLowerCase() === n.trim().toLowerCase()) || {}).id || '';
-        const mapped = pieces.map(({ stockName, ...p }) => ({ id: uid(), ...p, stock: byName(stockName) }));
+        const mapped = pieces.map(({ stockName, ...p }) => ({ id: uid(), ...p, stock: byName(stockName), enabled: p.enabled !== false }));
         state.pieces = replace ? mapped : state.pieces.concat(mapped);
         changed({ rerender: true });
         toast(`${pieces.length} peças importadas`);
@@ -846,6 +875,15 @@
   function bind() {
     bindTable('#piecesBody', 'pieces');
     bindTable('#stocksBody', 'stocks');
+
+    $('#allPieces').addEventListener('change', (e) => {
+      state.pieces.forEach((p) => { p.enabled = e.target.checked; });
+      changed({ rerender: true });
+    });
+    $('#allStocks').addEventListener('change', (e) => {
+      state.stocks.forEach((s) => { s.enabled = e.target.checked; });
+      changed({ rerender: true });
+    });
 
     $('#addPiece').addEventListener('click', addPiece);
     $('#addStock').addEventListener('click', addStock);

@@ -41,7 +41,7 @@
       const L = +p.length;
       const W = +p.width;
       const q = Math.floor(+p.qty);
-      if (!(L > 0 && W > 0 && q > 0)) return;
+      if (p.enabled === false || !(L > 0 && W > 0 && q > 0)) return;
       let w = L, h = W, rotated = false, canRotate = true;
       if (considerGrain && p.grain === 'length') {
         canRotate = false;
@@ -227,8 +227,9 @@
         length: +s.length,
         width: +s.width,
         qty: Math.floor(+s.qty),
+        enabled: s.enabled !== false,
       }))
-      .filter((s) => s.length > 2 * trim && s.width > 2 * trim && s.qty > 0);
+      .filter((s) => s.enabled && s.length > 2 * trim && s.width > 2 * trim && s.qty > 0);
 
     // A peça pode exigir uma chapa específica (pelo id da chapa).
     const stockById = new Map();

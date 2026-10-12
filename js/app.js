@@ -374,20 +374,56 @@
     </details>`;
   }
 
-  // Estatísticas de uma chapa
-  function sheetStats(s) {
+  // Painel "Estatísticas por chapa", com navegação ‹ 1 / N ›
+  let panelIndex = 0;
+
+  function panelStats(res, groups) {
+    const n = res.sheets.length;
+    if (!n) return '';
+    if (panelIndex >= n) panelIndex = 0;
+    const i = panelIndex;
+    const s = res.sheets[i];
     const u = UNITS[state.unit];
     const waste = s.area - s.usedArea;
-    const list = s.offcuts.slice(0, 4).map((o) => `${fmt(o.w)}×${fmt(o.h)} ${unit()}`).join(', ');
-    const more = s.offcuts.length > 4 ? ` +${s.offcuts.length - 4}` : '';
-    const item = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
-    return `<dl class="sheet-stats">
-      ${item('Área utilizada', `${fmt(s.usedArea / u.area)} ${u.areaU} <span class="muted">· ${pct(s.efficiency)}</span>`)}
-      ${item('Área de sobra', `${fmt(waste / u.area)} ${u.areaU} <span class="muted">· ${pct(waste / s.area)}</span>`)}
-      ${item('Cortes', `${s.cuts.length} <span class="muted">· ${fmt(s.cutLength / u.len)} ${u.lenU}</span>`)}
-      ${item('Peças', s.parts.length)}
-      ${item('Sobras', s.offcuts.length ? `${s.offcuts.length} <span class="muted mono">(${list}${more})</span>` : '0')}
-    </dl>`;
+    const gi = groups.findIndex((g) => i >= g.first - 1 && i < g.first - 1 + g.count);
+    const g = groups[gi];
+
+    let edge = 0;
+    for (const p of s.parts) {
+      const pc = state.pieces[p.piece] || {};
+      const e = pc.edges || {};
+      edge += ((e.c1 ? 1 : 0) + (e.c2 ? 1 : 0)) * (+pc.length || 0) + ((e.l1 ? 1 : 0) + (e.l2 ? 1 : 0)) * (+pc.width || 0);
+    }
+    const offcuts = s.offcuts.length
+      ? `${s.offcuts.length} <span class="muted">(${s.offcuts.map((o) => `${fmt(o.w)} × ${fmt(o.h)} ${unit()}`).join('; ')})</span>`
+      : '0';
+    const same = g && g.count > 1
+      ? `${row('Chapas iguais', `Este plano se repete em ${g.count} chapas (${g.first} a ${g.first + g.count - 1})`)}`
+      : '';
+
+    return `<details class="panel panel-sheet" data-key="panel-stats" open>
+      <summary>
+        <span>Estatísticas por chapa</span>
+        <span class="pager no-print">
+          <button type="button" class="pager-btn" data-panel="-1" aria-label="Chapa anterior"${n < 2 ? ' disabled' : ''}>‹</button>
+          <span class="pager-label"><strong>${i + 1}</strong> / ${n}</span>
+          <button type="button" class="pager-btn" data-panel="1" aria-label="Próxima chapa"${n < 2 ? ' disabled' : ''}>›</button>
+        </span>
+      </summary>
+      <table class="kv">
+        ${row('Chapa', `<strong>Chapa ${i + 1}</strong> <button type="button" class="link no-print" data-goto="${gi}">ver desenho</button>`)}
+        ${row('Material', esc(s.name || '—'))}
+        ${row('Medidas', dims(s.L, s.W))}
+        ${row('Área utilizada', `${fmt(s.usedArea / u.area)} ${u.areaU} <span class="muted">· ${pct(s.efficiency)}</span>`)}
+        ${row('Área de sobra', `${fmt(waste / u.area)} ${u.areaU} <span class="muted">· ${pct(waste / s.area)}</span>`)}
+        ${row('Cortes', s.cuts.length)}
+        ${row('Comprimento de corte', `${fmt(s.cutLength / u.len)} ${u.lenU}`)}
+        ${row('Peças', s.parts.length)}
+        ${row('Sobras', offcuts)}
+        ${row('Fita de borda', `${fmt(edge / u.len)} ${u.lenU}`)}
+        ${same}
+      </table>
+    </details>`;
   }
 
   function cutResult(r) {
@@ -465,6 +501,8 @@
     }
 
     html += statsTable(res);
+    const groups = groupSheets(res.sheets);
+    html += panelStats(res, groups);
 
     html += `<div class="view-toggles no-print">
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
@@ -472,7 +510,6 @@
       <label class="check inline"><input type="checkbox" data-view="showCuts"${state.showCuts ? ' checked' : ''}><span>Linhas de corte</span></label>
     </div>`;
 
-    const groups = groupSheets(res.sheets);
     html += '<div class="sheets">';
     groups.forEach((g, gi) => {
       const s = g.sheet;
@@ -488,7 +525,6 @@
         </header>
         <div class="svg-wrap">${Render.sheetSVG(s, state.pieces, { ...viewOpts(), key: gi })}</div>
         <ul class="parts-list">${partsSummary(s)}</ul>
-        ${sheetStats(s)}
         ${cutsTable(s, `cuts-${gi}`)}
       </article>`;
     });
@@ -887,7 +923,18 @@
     results.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
-      if (btn.id === 'btnPrint') window.print();
+      if (btn.dataset.panel) {
+        e.preventDefault(); // não abre/fecha o painel
+        const n = lastResult.sheets.length;
+        panelIndex = (panelIndex + +btn.dataset.panel + n) % n;
+        const old = results.querySelector('.panel-sheet');
+        const tmp = document.createElement('div');
+        tmp.innerHTML = panelStats(lastResult, results._groups);
+        old.replaceWith(tmp.firstElementChild);
+        results.querySelector(`.panel-sheet [data-panel="${btn.dataset.panel}"]`).focus();
+      } else if (btn.dataset.goto) {
+        results.querySelector(`.sheet[data-group="${btn.dataset.goto}"]`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (btn.id === 'btnPrint') window.print();
       else if (btn.id === 'btnPngAll') {
         for (let i = 0; i < results._groups.length; i++) await downloadPng(i);
       } else if (btn.dataset.png) downloadPng(+btn.dataset.png);

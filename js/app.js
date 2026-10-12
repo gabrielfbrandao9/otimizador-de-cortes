@@ -15,6 +15,11 @@
     in: { label: 'pol', len: 12, lenU: 'pés', area: 144, areaU: 'pés²' },
   };
 
+  const PRIORITIES = {
+    waste: 'Menor área desperdiçada',
+    cuts: 'Menos cortes',
+  };
+
   const AUTO_CALC_LIMIT = 300; // acima disso o cálculo só roda pelo botão
 
   function defaultState() {
@@ -25,6 +30,7 @@
       kerf: 3,
       trim: 10,
       considerGrain: true,
+      priority: 'waste',
       showLabels: true,
       showCuts: false,
       showEdges: true,
@@ -60,6 +66,7 @@
       qty: x.qty ?? 1,
     }));
     if (!UNITS[st.unit]) st.unit = 'mm';
+    if (!PRIORITIES[st.priority]) st.priority = 'waste';
     st.cloudId = typeof st.cloudId === 'string' ? st.cloudId : null;
     return st;
   }
@@ -165,6 +172,7 @@
     $('#optKerf').value = state.kerf;
     $('#optTrim').value = state.trim;
     $('#optGrain').checked = !!state.considerGrain;
+    $('#optPriority').value = state.priority;
     updateCounts();
   }
 
@@ -299,6 +307,89 @@
       .join('');
   }
 
+  const pct = (x) => `${fmt(x * 100)}%`;
+  const dims = (w, h) => `<span class="mono">${fmt(w)} × ${fmt(h)}</span>`;
+  const row = (label, value) => `<tr><th scope="row">${label}</th><td>${value}</td></tr>`;
+
+  // Tabela "Estatísticas" do plano inteiro
+  function statsTable(res) {
+    const u = UNITS[state.unit];
+    const st = res.stats;
+    const byStock = new Map();
+    for (const s of res.sheets) byStock.set(s.stockIndex, (byStock.get(s.stockIndex) || 0) + 1);
+    const used = [...byStock].map(([i, n]) => {
+      const s = res.sheets.find((x) => x.stockIndex === i);
+      return `${dims(s.L, s.W)} <strong>×${n}</strong>${s.name ? ` <span class="muted">· ${esc(s.name)}</span>` : ''}`;
+    }).join('<br>') || '—';
+    const offcuts = res.sheets.reduce((t, s) => t + s.offcuts.length, 0);
+
+    return `<details class="panel" data-key="stats" open>
+      <summary>Estatísticas</summary>
+      <table class="kv">
+        ${row('Chapas utilizadas', used)}
+        ${row('Peças', `${st.partsPlaced} de ${st.partsTotal}`)}
+        ${row('Área total utilizada', `${fmt(st.usedArea / u.area)} ${u.areaU} <span class="muted">· ${pct(st.efficiency)}</span>`)}
+        ${row('Área total desperdiçada', `${fmt(st.wasteArea / u.area)} ${u.areaU} <span class="muted">· ${pct(st.totalArea ? st.wasteArea / st.totalArea : 0)}</span>`)}
+        ${row('Sobras', offcuts)}
+        ${row('Cortes totais', st.cutCount)}
+        ${row('Comprimento de corte total', `${fmt(st.cutLength / u.len)} ${u.lenU}`)}
+        ${row('Fita de borda', `${fmt(st.edgeLength / u.len)} ${u.lenU}`)}
+        ${row('Espessura da serra', `${fmt(+state.kerf || 0)} ${u.label}`)}
+        ${row('Refilo', `${fmt(+state.trim || 0)} ${u.label}`)}
+        ${row('Veio', state.considerGrain ? 'Respeitado' : 'Ignorado')}
+        ${row('Prioridade de otimização', PRIORITIES[state.priority])}
+      </table>
+    </details>`;
+  }
+
+  // Estatísticas de uma chapa
+  function sheetStats(s) {
+    const u = UNITS[state.unit];
+    const waste = s.area - s.usedArea;
+    const list = s.offcuts.slice(0, 4).map((o) => `${fmt(o.w)}×${fmt(o.h)}`).join(', ');
+    const more = s.offcuts.length > 4 ? ` +${s.offcuts.length - 4}` : '';
+    const item = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+    return `<dl class="sheet-stats">
+      ${item('Área utilizada', `${fmt(s.usedArea / u.area)} ${u.areaU} <span class="muted">· ${pct(s.efficiency)}</span>`)}
+      ${item('Área de sobra', `${fmt(waste / u.area)} ${u.areaU} <span class="muted">· ${pct(waste / s.area)}</span>`)}
+      ${item('Cortes', `${s.cuts.length} <span class="muted">· ${fmt(s.cutLength / u.len)} ${u.lenU}</span>`)}
+      ${item('Peças', s.parts.length)}
+      ${item('Sobras', s.offcuts.length ? `${s.offcuts.length} <span class="muted mono">(${list}${more})</span>` : '0')}
+    </dl>`;
+  }
+
+  function cutResult(r) {
+    if (!r) return '<span class="muted">–</span>';
+    if (r.piece !== undefined) {
+      const p = state.pieces[r.piece] || {};
+      const c = Render.pieceColor(r.piece);
+      return `<span class="dot" style="background:${c.swatch}"></span><strong>${esc(p.name || `Peça ${r.piece + 1}`)}</strong> ${dims(r.w, r.h)}`;
+    }
+    if (r.kind === 'refilo') return '<span class="muted">refilo</span>';
+    if (r.kind === 'sobra') return `${dims(r.w, r.h)} <span class="tag">sobra</span>`;
+    return dims(r.w, r.h);
+  }
+
+  // Tabela "Sequência de cortes" de uma chapa
+  function cutsTable(s, key) {
+    const rows = s.cuts.map((c, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td>${dims(c.panel.w, c.panel.h)}</td>
+        <td class="mono">${c.axis}=${fmt(c.pos)}</td>
+        <td><div class="cut-res">${cutResult(c.a)}<span class="sep-bar">\\</span>${cutResult(c.b)}</div></td>
+      </tr>`).join('');
+    return `<details class="cuts" data-key="${key}">
+      <summary>Sequência de cortes <span class="muted">(${s.cuts.length})</span></summary>
+      <p class="muted cuts-help"><span class="mono">y</span> = corte horizontal, <span class="mono">x</span> = corte vertical, medidos a partir da borda de cima/esquerda do painel.</p>
+      <div class="table-wrap">
+        <table class="cut-table">
+          <thead><tr><th>#</th><th>Painel</th><th>Corte</th><th>Resultado</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </details>`;
+  }
+
   function renderResults() {
     const res = lastResult;
     const box = $('#results');
@@ -341,6 +432,8 @@
         + '</ul><p>Aumente a quantidade de chapas ou confira se a peça é maior que a chapa (considerando refilo e veio).</p></div>';
     }
 
+    html += statsTable(res);
+
     html += `<div class="view-toggles no-print">
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
       <label class="check inline"><input type="checkbox" data-view="showEdges"${state.showEdges ? ' checked' : ''}><span>Fita de borda</span></label>
@@ -363,11 +456,18 @@
         </header>
         <div class="svg-wrap">${Render.sheetSVG(s, state.pieces, { ...viewOpts(), key: gi })}</div>
         <ul class="parts-list">${partsSummary(s)}</ul>
+        ${sheetStats(s)}
+        ${cutsTable(s, `cuts-${gi}`)}
       </article>`;
     });
     html += '</div>';
 
+    // Mantém abertas/fechadas as seções como estavam antes de redesenhar.
+    const previous = new Map([...box.querySelectorAll('details[data-key]')].map((d) => [d.dataset.key, d.open]));
     box.innerHTML = html;
+    box.querySelectorAll('details[data-key]').forEach((d) => {
+      if (previous.has(d.dataset.key)) d.open = previous.get(d.dataset.key);
+    });
     box._groups = groups;
   }
 
@@ -700,7 +800,14 @@
       changed();
     });
 
+    $('#optPriority').addEventListener('change', (e) => { state.priority = e.target.value; changed(); });
+
     $('#btnCalc').addEventListener('click', calculate);
+
+    // Na impressão/PDF, mostra também as seções recolhidas (ex.: sequência de cortes).
+    window.addEventListener('beforeprint', () => {
+      document.querySelectorAll('#results details').forEach((d) => { d.open = true; });
+    });
 
     $('#btnNew').addEventListener('click', () => {
       if (!confirm('Começar um projeto novo? As alterações não salvas serão perdidas.')) return;

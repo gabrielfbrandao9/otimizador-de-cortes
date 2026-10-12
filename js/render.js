@@ -121,6 +121,16 @@
       s += `<g stroke="#dc2626" stroke-width="${sw * 1.6}" stroke-dasharray="${base * 0.5} ${base * 0.3}">`;
       for (const k of sheet.cuts) s += `<line x1="${k.x1}" y1="${k.y1}" x2="${k.x2}" y2="${k.y2}"/>`;
       s += '</g>';
+      // Número de cada corte (o mesmo da tabela "Sequência de cortes")
+      const r = base * 0.42;
+      s += `<g font-size="${base * 0.48}" font-weight="600" text-anchor="middle">`;
+      sheet.cuts.forEach((k, i) => {
+        const mx = (k.x1 + k.x2) / 2;
+        const my = (k.y1 + k.y2) / 2;
+        s += `<circle cx="${mx}" cy="${my}" r="${r}" fill="#dc2626"/>`
+          + `<text x="${mx}" y="${my}" dy="0.35em" fill="#ffffff">${i + 1}</text>`;
+      });
+      s += '</g>';
     }
 
     return s + '</svg>';

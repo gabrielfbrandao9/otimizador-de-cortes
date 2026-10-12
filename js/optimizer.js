@@ -106,18 +106,33 @@
     const out = [];
     const cx = f.x + w + kerf / 2;
     const cy = f.y + h + kerf / 2;
+    const piece = { w, h, piece: it.piece };
+
+    // Cada corte guarda o painel que está sendo cortado, a posição do corte
+    // (medida a partir da borda do painel) e os dois pedaços resultantes
+    // (null = tira mais fina que a serra, vira pó).
+    // Os cortes são registrados em uma ordem que pode ser executada na serra:
+    // um painel só é cortado depois do corte que o separou.
     if (horizontal) {
-      if (bh > EPS) out.push({ x: f.x, y: f.y + h + kerf, w: f.w, h: bh });
-      if (rw > EPS) out.push({ x: f.x + w + kerf, y: f.y, w: rw, h });
-      if (dh > EPS) sheet.cuts.push({ x1: f.x, y1: cy, x2: f.x + f.w, y2: cy });
-      if (dw > EPS) sheet.cuts.push({ x1: cx, y1: f.y, x2: cx, y2: f.y + h });
+      const bottom = bh > EPS ? { x: f.x, y: f.y + h + kerf, w: f.w, h: bh } : null;
+      const right = rw > EPS ? { x: f.x + w + kerf, y: f.y, w: rw, h } : null;
+      if (bottom) out.push(bottom);
+      if (right) out.push(right);
+      if (dh > EPS) addCut(sheet, f.x, cy, f.x + f.w, cy, f.w, f.h, 'y', h, dw > EPS ? { w: f.w, h } : piece, bottom);
+      if (dw > EPS) addCut(sheet, cx, f.y, cx, f.y + h, f.w, h, 'x', w, piece, right);
     } else {
-      if (rw > EPS) out.push({ x: f.x + w + kerf, y: f.y, w: rw, h: f.h });
-      if (bh > EPS) out.push({ x: f.x, y: f.y + h + kerf, w, h: bh });
-      if (dw > EPS) sheet.cuts.push({ x1: cx, y1: f.y, x2: cx, y2: f.y + f.h });
-      if (dh > EPS) sheet.cuts.push({ x1: f.x, y1: cy, x2: f.x + w, y2: cy });
+      const right = rw > EPS ? { x: f.x + w + kerf, y: f.y, w: rw, h: f.h } : null;
+      const bottom = bh > EPS ? { x: f.x, y: f.y + h + kerf, w, h: bh } : null;
+      if (right) out.push(right);
+      if (bottom) out.push(bottom);
+      if (dw > EPS) addCut(sheet, cx, f.y, cx, f.y + f.h, f.w, f.h, 'x', w, dh > EPS ? { w, h: f.h } : piece, right);
+      if (dh > EPS) addCut(sheet, f.x, cy, f.x + w, cy, w, f.h, 'y', h, piece, bottom);
     }
     sheet.free.splice(fi, 1, ...out);
+  }
+
+  function addCut(sheet, x1, y1, x2, y2, pw, ph, axis, pos, a, b) {
+    sheet.cuts.push({ x1, y1, x2, y2, panel: { w: pw, h: ph }, axis, pos, a, b });
   }
 
   function pack(items, stocks, opt, strat) {
@@ -153,7 +168,7 @@
     return { sheets, unplaced };
   }
 
-  function score(res) {
+  function score(res, priority) {
     let area = 0, concentration = 0, cuts = 0;
     for (const s of res.sheets) {
       const a = s.L * s.W;
@@ -161,6 +176,10 @@
       area += a;
       concentration += (used / a) ** 2;
       cuts += s.cuts.length;
+    }
+    if (priority === 'cuts') {
+      // Menos peças de fora > menos chapas > menos cortes > menos área de chapa
+      return [res.unplaced.length, res.sheets.length, cuts, area, -concentration];
     }
     // Menos peças de fora > menos área de chapa > menos chapas >
     // chapas mais cheias (sobra concentrada) > menos cortes
@@ -215,7 +234,7 @@
         const sorter = SORTS[st.sort];
         const ordered = items.slice().sort((a, b) => sorter(a, b) || a.piece - b.piece);
         const res = pack(ordered, stocks, { kerf, trim }, st);
-        const sc = score(res);
+        const sc = score(res, input.priority);
         if (!best || better(sc, bestScore)) { best = res; bestScore = sc; }
       }
     } else {
@@ -229,21 +248,34 @@
     let totalArea = 0, usedArea = 0, cutCount = 0, cutLength = 0, edgeLength = 0;
 
     const sheets = res.sheets.map((s) => {
-      const cuts = s.cuts.slice();
+      // Pedaços que nunca foram cortados de novo são sobras; os demais são painéis intermediários.
+      const leftovers = new Set(s.free);
+      const result = (r) => {
+        if (!r) return null;
+        if (r.piece !== undefined) return { w: r.w, h: r.h, piece: r.piece };
+        return { w: r.w, h: r.h, kind: leftovers.has(r) ? 'sobra' : 'painel' };
+      };
+      const cuts = s.cuts.map((c) => ({ ...c, a: result(c.a), b: result(c.b) }));
+
       if (trim > 0) {
+        const { L, W } = s;
+        const T = trim;
+        const R = (w, h, kind) => ({ w, h, kind });
         cuts.unshift(
-          { x1: 0, y1: trim, x2: s.L, y2: trim },
-          { x1: 0, y1: s.W - trim, x2: s.L, y2: s.W - trim },
-          { x1: trim, y1: trim, x2: trim, y2: s.W - trim },
-          { x1: s.L - trim, y1: trim, x2: s.L - trim, y2: s.W - trim }
+          { x1: 0, y1: T, x2: L, y2: T, panel: { w: L, h: W }, axis: 'y', pos: T, a: R(L, T, 'refilo'), b: R(L, W - T, 'painel') },
+          { x1: 0, y1: W - T, x2: L, y2: W - T, panel: { w: L, h: W - T }, axis: 'y', pos: W - 2 * T, a: R(L, W - 2 * T, 'painel'), b: R(L, T, 'refilo') },
+          { x1: T, y1: T, x2: T, y2: W - T, panel: { w: L, h: W - 2 * T }, axis: 'x', pos: T, a: R(T, W - 2 * T, 'refilo'), b: R(L - T, W - 2 * T, 'painel') },
+          { x1: L - T, y1: T, x2: L - T, y2: W - T, panel: { w: L - T, h: W - 2 * T }, axis: 'x', pos: L - 2 * T, a: R(L - 2 * T, W - 2 * T, 'painel'), b: R(T, W - 2 * T, 'refilo') }
         );
       }
       const area = s.L * s.W;
       const used = s.parts.reduce((t, p) => t + p.w * p.h, 0);
+      let sheetCutLength = 0;
+      for (const c of cuts) sheetCutLength += Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
       totalArea += area;
       usedArea += used;
       cutCount += cuts.length;
-      for (const c of cuts) cutLength += Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
+      cutLength += sheetCutLength;
       for (const p of s.parts) {
         const piece = input.pieces[p.piece];
         const e = piece.edges || {};
@@ -258,7 +290,8 @@
         trim,
         parts: s.parts,
         cuts,
-        offcuts: s.free,
+        cutLength: sheetCutLength,
+        offcuts: s.free.map(({ x, y, w, h }) => ({ x, y, w, h })).sort((a, b) => b.w * b.h - a.w * a.h),
         area,
         usedArea: used,
         efficiency: used / area,

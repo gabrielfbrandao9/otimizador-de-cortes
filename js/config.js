@@ -10,8 +10,8 @@
  * ou "secret".
  */
 window.APP_CONFIG = {
-  supabaseUrl: '',   // ex.: 'https://abcdefghijklm.supabase.co'
-  supabaseKey: '',   // chave anon/publishable
+  supabaseUrl: 'https://hvpafupdzqoochnlkfvp.supabase.co',   // ex.: 'https://abcdefghijklm.supabase.co'
+  supabaseKey: 'sb_publishable_gxZJWsTHWsg4tZkcIAnhCA_tQPPYppf',   // chave anon/publishable
 
   // Formas de login exibidas na tela "Entrar"
   loginGoogle: true, // exige configurar o Google no Supabase (passo 5 do SUPABASE.md)

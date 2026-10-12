@@ -61,7 +61,7 @@
   /**
    * @param sheet  chapa do resultado do otimizador
    * @param pieces lista de peças do projeto
-   * @param o      { showLabels, showEdges, showOffcuts, showCuts, showOrder, step,
+   * @param o      { showLabels, showEdges, showOffcuts, showOrder, step,
    *                 fontScale, mono, vertical, key, unit }
    *   step: 0 = todos os cortes; k = passo a passo, destacando o corte k
    */
@@ -163,9 +163,9 @@
       }
     }
 
-    // Linhas de corte e ordem dos cortes
-    if (o.showCuts || o.showOrder) {
-      const step = o.showOrder ? o.step || 0 : 0;
+    // Ordem dos cortes: linhas numeradas
+    if (o.showOrder) {
+      const step = o.step || 0;
       const shown = [];
       sheet.cuts.forEach((cut, i) => {
         if (step && i >= step) return; // cortes que ainda não foram feitos
@@ -177,15 +177,13 @@
         s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${done ? C.cutDone : C.cut}"`
           + ` stroke-width="${current ? sw * 6 : sw * 1.6}"${current ? '' : ` stroke-dasharray="${base * 0.5} ${base * 0.3}"`}/>`;
       });
-      if (o.showOrder) {
-        s += '<g font-weight="700" text-anchor="middle">';
-        for (const m of shown) {
-          const r = base * 0.62 * k * (m.current ? 1.5 : 1);
-          s += `<circle cx="${m.x}" cy="${m.y}" r="${r}" fill="${m.done ? C.cutDone : C.cut}" stroke="#ffffff" stroke-width="${sw * 2}"/>`
-            + `<text x="${m.x}" y="${m.y}" dy="0.35em" font-size="${r * 1.15}" fill="#ffffff">${m.i + 1}</text>`;
-        }
-        s += '</g>';
+      s += '<g font-weight="700" text-anchor="middle">';
+      for (const m of shown) {
+        const r = base * 0.62 * k * (m.current ? 1.5 : 1);
+        s += `<circle cx="${m.x}" cy="${m.y}" r="${r}" fill="${m.done ? C.cutDone : C.cut}" stroke="#ffffff" stroke-width="${sw * 2}"/>`
+          + `<text x="${m.x}" y="${m.y}" dy="0.35em" font-size="${r * 1.15}" fill="#ffffff">${m.i + 1}</text>`;
       }
+      s += '</g>';
     }
 
     return s + '</svg>';

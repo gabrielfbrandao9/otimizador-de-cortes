@@ -35,7 +35,6 @@
       considerGrain: true,
       priority: 'waste',
       showLabels: true,
-      showCuts: false,
       showEdges: true,
       showOffcuts: true,
       showOrder: false,
@@ -550,7 +549,6 @@
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
       <label class="check inline"><input type="checkbox" data-view="showEdges"${state.showEdges ? ' checked' : ''}><span>Fita de borda</span></label>
       <label class="check inline"><input type="checkbox" data-view="showOffcuts"${state.showOffcuts ? ' checked' : ''}><span>Sobras</span></label>
-      <label class="check inline"><input type="checkbox" data-view="showCuts"${state.showCuts ? ' checked' : ''}><span>Linhas de corte</span></label>
       <label class="check inline"><input type="checkbox" data-view="showOrder"${state.showOrder ? ' checked' : ''}><span>Ordem dos cortes</span></label>
     </div>`;
 
@@ -588,7 +586,7 @@
 
   function viewOpts() {
     return {
-      showLabels: state.showLabels, showEdges: state.showEdges, showCuts: state.showCuts,
+      showLabels: state.showLabels, showEdges: state.showEdges,
       showOffcuts: state.showOffcuts, showOrder: state.showOrder,
       fontScale: state.fontScale, mono: state.mono, vertical: state.vertical, unit: unit(),
     };

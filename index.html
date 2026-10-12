@@ -28,6 +28,7 @@
       <button type="button" class="btn" id="btnNew">Novo</button>
       <button type="button" class="btn" id="btnSave">Salvar</button>
       <button type="button" class="btn" id="btnOpen">Abrir</button>
+      <button type="button" class="btn" id="btnShare">Compartilhar</button>
       <details class="dropdown">
         <summary class="btn">Arquivo ▾</summary>
         <div class="menu">
@@ -159,6 +160,27 @@
         <h3>Neste navegador</h3>
         <ul id="projectList" class="project-list"></ul>
       </section>
+    </form>
+  </dialog>
+
+  <dialog id="dlgShare">
+    <form method="dialog" class="dlg">
+      <div class="dlg-head">
+        <h2>Compartilhar projeto</h2>
+        <button class="icon" value="close" aria-label="Fechar">×</button>
+      </div>
+      <p class="muted dlg-text">Envie este link para outra pessoa. Ao abrir, ela recebe uma <strong>cópia</strong> do projeto
+        como está agora e pode ver, editar e salvar a dela, sem mexer no seu.</p>
+      <div class="share-row">
+        <input type="text" id="shareLink" readonly aria-label="Link do projeto">
+        <button type="button" class="btn primary" id="btnCopyLink">Copiar</button>
+      </div>
+      <div class="share-actions">
+        <a class="btn" id="shareWhats" target="_blank" rel="noopener">WhatsApp</a>
+        <a class="btn" id="shareEmail">E-mail</a>
+        <button type="button" class="btn" id="btnNativeShare" hidden>Mais opções…</button>
+      </div>
+      <p class="muted share-note">O link guarda o projeto do jeito que está agora. Se você mudar algo depois, compartilhe de novo.</p>
     </form>
   </dialog>
 

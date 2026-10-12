@@ -826,6 +826,88 @@
     if (msg) toast(msg);
   }
 
+  // ---------- Compartilhar ----------
+  // O projeto vai dentro do próprio link (#p=...), compactado. Não precisa de servidor nem de login.
+
+  function toBase64Url(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function fromBase64Url(str) {
+    const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  }
+
+  async function pipeBytes(bytes, stream) {
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  }
+
+  // "z" = JSON compactado (deflate); "j" = JSON puro, para navegadores sem CompressionStream.
+  async function encodeProject(data) {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    if (window.CompressionStream) return 'z' + toBase64Url(await pipeBytes(bytes, new CompressionStream('deflate-raw')));
+    return 'j' + toBase64Url(bytes);
+  }
+
+  async function decodeProject(code) {
+    let bytes = fromBase64Url(code.slice(1));
+    if (code[0] === 'z') bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+    else if (code[0] !== 'j') throw new Error('link inválido');
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  async function openShare() {
+    const name = (state.name || '').trim() || 'Projeto';
+    // No computador local (localhost) o link aponta para o site publicado, para a outra pessoa conseguir abrir.
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
+    const base = local && (window.APP_CONFIG || {}).siteUrl ? window.APP_CONFIG.siteUrl : location.origin + location.pathname;
+    const url = `${base}#p=${await encodeProject(projectData())}`;
+    const text = `Plano de corte “${name}” no Otimizador de Cortes:`;
+    $('#shareLink').value = url;
+    $('#shareWhats').href = `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`;
+    $('#shareEmail').href = `mailto:?subject=${encodeURIComponent(`Plano de corte: ${name}`)}&body=${encodeURIComponent(`${text}\n\n${url}`)}`;
+    $('#btnNativeShare').hidden = !navigator.share;
+    $('#btnCopyLink').textContent = 'Copiar';
+    $('#dlgShare').showModal();
+    $('#shareLink').select();
+  }
+
+  async function copyShareLink() {
+    const input = $('#shareLink');
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch (e) {
+      input.select();
+      document.execCommand('copy');
+    }
+    $('#btnCopyLink').textContent = 'Copiado ✓';
+    toast('Link copiado');
+  }
+
+  // Abre um projeto recebido por link.
+  async function openSharedFromUrl() {
+    const m = location.hash.match(/^#p=([\w-]+)$/);
+    if (!m) return;
+    let data;
+    try {
+      data = await decodeProject(m[1]);
+      if (!data || !Array.isArray(data.pieces)) throw new Error('link inválido');
+    } catch (err) {
+      history.replaceState(null, '', location.pathname + location.search);
+      toast('Este link de projeto está incompleto ou corrompido.');
+      return;
+    }
+    const name = data.name || 'Projeto compartilhado';
+    const hasCurrent = state.pieces.some((p) => +p.length > 0 && +p.width > 0);
+    if (hasCurrent && !confirm(`Abrir o projeto compartilhado “${name}”?\n\nEle vai substituir o projeto aberto agora (“${state.name || 'sem nome'}”). Se precisar dele, cancele e salve-o antes.`)) {
+      return;
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+    loadState({ ...data, cloudId: null }, `Projeto compartilhado “${name}” aberto. Clique em Salvar para guardar sua cópia.`);
+  }
+
   // ---------- Conta ----------
 
   function renderAccount() {
@@ -1035,6 +1117,12 @@
     });
     $('#btnSave').addEventListener('click', save);
     $('#btnOpen').addEventListener('click', openProjects);
+    $('#btnShare').addEventListener('click', openShare);
+    $('#btnCopyLink').addEventListener('click', copyShareLink);
+    $('#btnNativeShare').addEventListener('click', () => {
+      navigator.share({ title: state.name || 'Plano de corte', url: $('#shareLink').value }).catch(() => {});
+    });
+    window.addEventListener('hashchange', openSharedFromUrl);
     $('#dlgProjects').addEventListener('click', onProjectsClick);
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -1104,4 +1192,5 @@
   renderAccount();
   bindAccount();
   calculate();
+  openSharedFromUrl();
 })();

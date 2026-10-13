@@ -24,6 +24,21 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
   - baixar cada chapa como imagem `.png`;
   - imprimir ou salvar em PDF.
 
+## Aplicativo para Android
+
+O site é também um **aplicativo instalável (PWA)**:
+
+1. No celular Android, abra o site no **Chrome**.
+2. Toque em **Instalar app** (no topo da página) ou no menu ⋮ → **Instalar app** / **Adicionar à tela inicial**.
+3. O ícone **Cortes** aparece na tela inicial. O app abre em tela cheia, com abas
+   (Peças · Chapas · Opções · Plano) e **funciona sem internet** depois da primeira abertura.
+
+Atualizações chegam sozinhas: a cada `git push`, o app pega a versão nova na próxima vez que abrir com internet.
+O login e os projetos na nuvem precisam de conexão; o resto funciona offline.
+
+Arquivos do app: `manifest.webmanifest`, `sw.js` (funcionamento offline) e a pasta `icons/`.
+Ao adicionar um arquivo novo ao site, inclua-o na lista `APP_FILES` do `sw.js` e aumente a `VERSION`.
+
 ## Como usar localmente
 
 Abra o `index.html` direto no navegador, ou sirva a pasta:

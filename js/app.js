@@ -160,19 +160,19 @@
     return `<tr data-id="${p.id}"${p.enabled ? '' : ' class="off"'}>
       <td class="c-on">${enabledBox(p, 'Usar esta peça no cálculo')}</td>
       <td class="c-n"><span class="swatch" style="background:${c.swatch}">${i + 1}</span></td>
-      <td><input type="text" data-f="name" value="${esc(p.name)}" placeholder="Peça ${i + 1}" aria-label="Nome"></td>
-      <td class="c-num">${numInput('length', p.length, 'aria-label="Comprimento"')}</td>
-      <td class="c-num">${numInput('width', p.width, 'aria-label="Largura"')}</td>
-      <td class="c-qty">${numInput('qty', p.qty, 'step="1" min="1" inputmode="numeric" aria-label="Quantidade"')}</td>
-      <td class="c-grain">
+      <td class="c-name"><input type="text" data-f="name" value="${esc(p.name)}" placeholder="Peça ${i + 1}" aria-label="Nome"></td>
+      <td class="c-num c-len" data-label="Comp. (${unit()})">${numInput('length', p.length, 'aria-label="Comprimento"')}</td>
+      <td class="c-num c-wid" data-label="Larg. (${unit()})">${numInput('width', p.width, 'aria-label="Largura"')}</td>
+      <td class="c-qty" data-label="Qtd">${numInput('qty', p.qty, 'step="1" min="1" inputmode="numeric" aria-label="Quantidade"')}</td>
+      <td class="c-grain" data-label="Veio">
         <select data-f="grain" aria-label="Veio" ${state.considerGrain ? '' : 'disabled'}>
           <option value="none"${p.grain === 'none' ? ' selected' : ''}>Livre</option>
           <option value="length"${p.grain === 'length' ? ' selected' : ''}>↔ Comp.</option>
           <option value="width"${p.grain === 'width' ? ' selected' : ''}>↕ Larg.</option>
         </select>
       </td>
-      <td class="c-stock">${stockSelect(p)}</td>
-      <td class="c-edge">
+      <td class="c-stock" data-label="Chapa">${stockSelect(p)}</td>
+      <td class="c-edge" data-label="Fita">
         <div class="edgebox" role="group" aria-label="Fita de borda">
           ${edgeBtn('c1', 'Comprimento 1 (cima)')}${edgeBtn('c2', 'Comprimento 2 (baixo)')}
           ${edgeBtn('l1', 'Largura 1 (esquerda)')}${edgeBtn('l2', 'Largura 2 (direita)')}
@@ -197,10 +197,10 @@
   function stockRow(s) {
     return `<tr data-id="${s.id}"${s.enabled ? '' : ' class="off"'}>
       <td class="c-on">${enabledBox(s, 'Usar esta chapa no cálculo')}</td>
-      <td><input type="text" data-f="name" value="${esc(s.name)}" placeholder="Material" aria-label="Material"></td>
-      <td class="c-num">${numInput('length', s.length, 'aria-label="Comprimento"')}</td>
-      <td class="c-num">${numInput('width', s.width, 'aria-label="Largura"')}</td>
-      <td class="c-qty">${numInput('qty', s.qty, 'step="1" min="1" inputmode="numeric" aria-label="Quantidade"')}</td>
+      <td class="c-name"><input type="text" data-f="name" value="${esc(s.name)}" placeholder="Material" aria-label="Material"></td>
+      <td class="c-num c-len" data-label="Comp. (${unit()})">${numInput('length', s.length, 'aria-label="Comprimento"')}</td>
+      <td class="c-num c-wid" data-label="Larg. (${unit()})">${numInput('width', s.width, 'aria-label="Largura"')}</td>
+      <td class="c-qty" data-label="Qtd">${numInput('qty', s.qty, 'step="1" min="1" inputmode="numeric" aria-label="Quantidade"')}</td>
       <td class="c-del"><button type="button" class="icon" data-act="del" aria-label="Remover chapa">×</button></td>
     </tr>`;
   }
@@ -580,6 +580,7 @@
       if (previous.has(d.dataset.key)) d.open = previous.get(d.dataset.key);
     });
     box._groups = groups;
+    updateTabBadge(res);
     applyZoom();
     groups.forEach((_, gi) => highlightStep(gi));
   }
@@ -824,6 +825,78 @@
     lastResult = null;
     calculate();
     if (msg) toast(msg);
+  }
+
+  // ---------- App no celular: abas, instalação e modo offline ----------
+
+  const mobile = window.matchMedia('(max-width: 760px)');
+  const TABS = ['pieces', 'stocks', 'options', 'plan'];
+
+  function setTab(tab) {
+    if (!TABS.includes(tab)) tab = 'pieces';
+    document.body.dataset.tab = tab;
+    document.querySelectorAll('.tabbar [data-goto-tab]').forEach((b) => {
+      const on = b.dataset.gotoTab === tab;
+      b.classList.toggle('on', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    try { sessionStorage.setItem('otimizador:aba', tab); } catch (e) { /* sem armazenamento */ }
+    if (mobile.matches) window.scrollTo(0, 0);
+  }
+
+  function updateTabBadge(res) {
+    const badge = $('#tabBadge');
+    if (!badge) return;
+    if (!res || !res.stats.partsTotal) { badge.hidden = true; return; }
+    badge.hidden = false;
+    badge.classList.toggle('warn', res.unplaced.length > 0);
+    badge.textContent = res.unplaced.length ? '!' : `${Math.round(res.stats.efficiency * 100)}%`;
+  }
+
+  let installPrompt = null;
+
+  function bindApp() {
+    let saved = null;
+    try { saved = sessionStorage.getItem('otimizador:aba'); } catch (e) { /* sem armazenamento */ }
+    setTab(saved || 'pieces');
+    document.querySelector('.tabbar').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-goto-tab]');
+      if (b) setTab(b.dataset.gotoTab);
+    });
+    // No celular, calcular leva direto para o plano.
+    $('#btnCalc').addEventListener('click', () => { if (mobile.matches) setTab('plan'); });
+
+    // Funciona sem internet depois da primeira visita.
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+
+    // Botão "Instalar app" (Android/Chrome)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      $('#btnInstall').hidden = false;
+    });
+    $('#btnInstall').addEventListener('click', async () => {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => null);
+      installPrompt = null;
+      $('#btnInstall').hidden = true;
+    });
+    window.addEventListener('appinstalled', () => {
+      $('#btnInstall').hidden = true;
+      toast('App instalado! Procure “Cortes” na tela inicial.');
+    });
+
+    // Aviso de "sem internet"
+    const net = () => {
+      $('#netStatus').hidden = navigator.onLine;
+      document.body.classList.toggle('offline', !navigator.onLine);
+    };
+    window.addEventListener('online', () => { net(); toast('Conexão restabelecida'); });
+    window.addEventListener('offline', () => { net(); toast('Sem internet: o app continua funcionando. A nuvem volta com a conexão.'); });
+    net();
   }
 
   // ---------- Compartilhar ----------
@@ -1088,6 +1161,7 @@
       state.unit = e.target.value;
       updateUnitLabels();
       renderPieces(); // o seletor de chapa mostra as medidas com a unidade
+      $('#stocksBody').innerHTML = state.stocks.map(stockRow).join('');
       changed();
     });
     $('#optKerf').addEventListener('input', (e) => { state.kerf = e.target.value === '' ? 0 : +e.target.value; changed(); });
@@ -1189,6 +1263,7 @@
 
   renderInputs();
   bind();
+  bindApp();
   renderAccount();
   bindAccount();
   calculate();

@@ -20,8 +20,9 @@
   color-scheme: light;
 }
 
+/* Tema escuro: pelo sistema (se a pessoa não escolheu "claro") ou escolhido no botão */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #171411;
     --surface: #211d19;
     --surface-2: #1b1815;
@@ -39,6 +40,25 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #171411;
+  --surface: #211d19;
+  --surface-2: #1b1815;
+  --ink: #efe8de;
+  --muted: #a59a8c;
+  --line: #342e27;
+  --line-strong: #4a4238;
+  --accent: #e0794a;
+  --accent-ink: #1b120c;
+  --accent-soft: #3a2519;
+  --edge: #f08a4b;
+  --danger: #f2877c;
+  --danger-soft: #3a1d1a;
+  --ok: #6cc28f;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -97,6 +117,27 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* Botão de tema claro/escuro */
+.theme-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  margin-left: auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+.theme-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.theme-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn .moon { display: none; }
+.theme-dark .theme-btn .sun { display: none; }
+.theme-dark .theme-btn .moon { display: block; }
 
 /* Conta */
 .account { display: flex; align-items: center; gap: 4px; padding-left: 8px; margin-left: 4px; border-left: 1px solid var(--line); }
@@ -651,6 +692,9 @@ a.brand { color: inherit; text-decoration: none; }
   .lbl-long { display: none; }
   .lbl-short { display: inline; }
   .account { grid-column: 1 / -1; }
+  .brand { order: 0; }
+  .theme-btn { order: 1; }
+  .project { order: 2; }
 
   /* Só a seção da aba escolhida aparece */
   .layout [data-tab] { display: none !important; }

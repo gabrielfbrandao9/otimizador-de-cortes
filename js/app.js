@@ -1109,6 +1109,11 @@
         const data = JSON.parse(await Store.readFile(f));
         if (!data || !Array.isArray(data.pieces)) throw new Error('arquivo não parece ser um projeto');
         loadState({ ...data, cloudId: null }, 'Projeto importado');
+      } else if (kind === 'example-wardrobe') {
+        const data = await (await fetch('exemplos/guarda-roupa-4-portas-4-gavetas.json')).json();
+        const hasCurrent = state.pieces.some((p) => +p.length > 0 && +p.width > 0);
+        if (hasCurrent && !confirm(`Abrir o exemplo “${data.name}”?\n\nEle vai substituir o projeto aberto agora (“${state.name || 'sem nome'}”). Se precisar dele, cancele e salve-o antes.`)) return;
+        loadState({ ...data, cloudId: null }, `Exemplo “${data.name}” aberto`);
       } else if (kind === 'import-csv') {
         const f = await pickFile('.csv,text/csv,.txt');
         if (!f) return;

@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [
@@ -27,6 +27,7 @@ const APP_FILES = [
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
+  'exemplos/guarda-roupa-4-portas-4-gavetas.json',
 ];
 
 const CDN_FILES = [

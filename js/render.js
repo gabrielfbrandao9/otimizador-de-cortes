@@ -50,18 +50,18 @@
   const COLORS = {
     color: {
       hatchBg: '#f1ebe1', hatchLine: '#dcd0bc', sheet: '#5c4a36', dim: '#6b5d4d', trim: '#a8977f',
-      offStroke: '#9c8a70', offText: '#6b5a45', cut: '#dc2626', cutDone: '#b5a593',
+      offStroke: '#9c8a70', offText: '#6b5a45', edge: '#c2410c', cut: '#dc2626', cutDone: '#b5a593',
     },
     mono: {
       hatchBg: '#ffffff', hatchLine: '#dddddd', sheet: '#000000', dim: '#333333', trim: '#888888',
-      offStroke: '#777777', offText: '#333333', cut: '#000000', cutDone: '#aaaaaa',
+      offStroke: '#777777', offText: '#333333', edge: '#000000', cut: '#000000', cutDone: '#aaaaaa',
     },
   };
 
   /**
    * @param sheet  chapa do resultado do otimizador
    * @param pieces lista de peças do projeto
-   * @param o      { showLabels, showOffcuts, showOrder, step,
+   * @param o      { showLabels, showEdges, showOffcuts, showOrder, step,
    *                 fontScale, mono, vertical, key, unit }
    *   step: 0 = todos os cortes; k = passo a passo, destacando o corte k
    */
@@ -128,6 +128,24 @@
       const dims = `${fmt(+piece.length)} × ${fmt(+piece.width)}${u}`;
       s += `<g><title>${esc(name)} — ${esc(dims)}${part.rotated ? ' (girada)' : ''}</title>`;
       s += `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${sw * 1.5}"/>`;
+
+      if (o.showEdges && piece.edges) {
+        const e = piece.edges;
+        // c1/c2 são as bordas do comprimento; com a peça girada elas ficam na vertical.
+        let sides = part.rotated
+          ? { top: e.l2, bottom: e.l1, left: e.c1, right: e.c2 }
+          : { top: e.c1, bottom: e.c2, left: e.l1, right: e.l2 };
+        if (vertical) sides = { top: sides.left, right: sides.top, bottom: sides.right, left: sides.bottom };
+        const t = Math.min(base * 0.3, Math.min(p.w, p.h) * 0.08);
+        const h = t / 2;
+        const x2 = p.x + p.w, y2 = p.y + p.h;
+        s += `<g stroke="${C.edge}" stroke-width="${t}" stroke-linecap="butt">`;
+        if (sides.top) s += `<line x1="${p.x}" y1="${p.y + h}" x2="${x2}" y2="${p.y + h}"/>`;
+        if (sides.bottom) s += `<line x1="${p.x}" y1="${y2 - h}" x2="${x2}" y2="${y2 - h}"/>`;
+        if (sides.left) s += `<line x1="${p.x + h}" y1="${p.y}" x2="${p.x + h}" y2="${y2}"/>`;
+        if (sides.right) s += `<line x1="${x2 - h}" y1="${p.y}" x2="${x2 - h}" y2="${y2}"/>`;
+        s += '</g>';
+      }
 
       s += label(o.showLabels ? [name, dims] : [dims], p, c.text, base * 1.1);
       s += '</g>';

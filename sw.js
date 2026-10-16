@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [
@@ -36,7 +36,7 @@ const APP_FILES = [
 const CDN_FILES = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js',
   'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-  'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
 ];
 
@@ -63,7 +63,8 @@ self.addEventListener('activate', (event) => {
 function isCacheableCdn(url) {
   return url.hostname === 'fonts.googleapis.com'
     || url.hostname === 'fonts.gstatic.com'
-    || url.hostname === 'cdn.jsdelivr.net';
+    || url.hostname === 'cdn.jsdelivr.net'
+    || url.hostname === 'cdnjs.cloudflare.com';
 }
 
 // Rede primeiro, com limite de tempo; sem rede, usa o cache.

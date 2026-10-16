@@ -1,65 +1,59 @@
 /*
- * PDF do plano de corte (jsPDF + jsPDF-AutoTable, carregados só quando precisa).
+ * PDF do plano de corte com o mesmo visual do site (como a antiga impressão
+ * "Imprimir / PDF").
  *
- * Página 1: resumo (chapas usadas e números do plano) e lista de peças.
- * Depois, para cada desenho de chapa: uma página com o desenho (com as mesmas
- * opções de visualização da tela) e a sequência de cortes.
+ * O resultado da tela é copiado para uma página invisível, com largura de
+ * computador e tema claro (igual à impressão, mesmo no celular ou no modo
+ * escuro). Cada parte (resumo, estatísticas, cada chapa) vira uma imagem
+ * (html2canvas) e é posta em páginas A4 (jsPDF), sem cortar no meio. Partes
+ * mais altas que uma página, como uma sequência de cortes longa, quebram entre
+ * as linhas da tabela.
  *
- * As fontes padrão do PDF só têm caracteres do português "comum": clean()
- * troca ou tira o que elas não conseguem mostrar.
+ * As bibliotecas são carregadas só quando precisa (e ficam guardadas para usar
+ * sem internet).
  */
 (function (global) {
   'use strict';
 
-  const LIBS = [
-    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
-  ];
+  const JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  const HTML2CANVAS = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap';
 
-  const ACCENT = [180, 83, 42];
-  const ACCENT_SOFT = [246, 229, 220];
-  const INK = [34, 29, 23];
-  const MUTED = [119, 108, 95];
-  const LINE = [228, 221, 210];
+  const RENDER_W = 1000; // largura (px) da página invisível
+  const PAGE_W = 210;    // A4 em pé (mm)
+  const PAGE_H = 297;
+  const MARGIN = 10;
+  const FOOTER = 8;      // espaço do rodapé (mm)
+  const GAP = 4;         // espaço entre as partes (mm)
+  const SCALE = 2;       // nitidez das imagens
 
-  const PW = 297; // A4 deitado
-  const PH = 210;
-  const M = 14;
-
-  let loading = null;
-
-  function loadScript(src) {
+  function loadScript(src, doc) {
+    doc = doc || document;
     return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
+      const s = doc.createElement('script');
       s.src = src;
       s.onload = resolve;
       s.onerror = () => reject(new Error('o gerador de PDF não carregou. Verifique a internet e tente de novo.'));
-      document.head.appendChild(s);
+      doc.head.appendChild(s);
     });
   }
 
-  // jsPDF primeiro; o AutoTable depende dele.
-  function loadLibs() {
-    if (global.jspdf && global.jspdf.jsPDF && global.jspdf.jsPDF.API.autoTable) return Promise.resolve();
-    if (!loading) {
-      loading = LIBS.reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
-        .catch((err) => { loading = null; throw err; });
-    }
-    return loading;
+  let jspdfLoading = null;
+  function loadJsPdf() {
+    if (global.jspdf && global.jspdf.jsPDF) return Promise.resolve();
+    if (!jspdfLoading) jspdfLoading = loadScript(JSPDF).catch((e) => { jspdfLoading = null; throw e; });
+    return jspdfLoading;
   }
 
   const clean = (s) => String(s == null ? '' : s)
     .replace(/[−–—]/g, '-')
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/…/g, '...')
-    .replace(/[✓☁]/g, '')
     .replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, '');
 
-  // Desenho de uma chapa como JPEG (o PDF fica bem menor que com PNG).
-  function sheetJpeg(svg, width) {
+  // Desenho SVG de uma chapa como imagem PNG (o html2canvas lida melhor com imagens).
+  function svgToPng(svg, width) {
     return new Promise((resolve, reject) => {
-      const vb = svg.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
+      const src = svg.outerHTML;
+      const vb = src.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
       const height = Math.round((width * vb[3]) / vb[2]);
       const img = new Image();
       img.onload = () => {
@@ -70,217 +64,166 @@
         g.fillStyle = '#ffffff';
         g.fillRect(0, 0, width, height);
         g.drawImage(img, 0, 0, width, height);
-        resolve({ url: c.toDataURL('image/jpeg', 0.9), ratio: height / width });
+        resolve(c.toDataURL('image/png'));
       };
       img.onerror = () => reject(new Error('falha ao desenhar a chapa'));
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', `<svg width="${width}" height="${height}" `));
+      const sized = src.replace(/^<svg /, `<svg width="${width}" height="${height}" `).replace(/ style="[^"]*"/, '');
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(sized);
     });
+  }
+
+  // Página invisível com o CSS do site, largura de computador e tema claro.
+  async function makeFrame() {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    frame.style.cssText = `position:fixed;left:-${RENDER_W + 2000}px;top:0;width:${RENDER_W}px;height:1200px;border:0;pointer-events:none`;
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    const css = new URL('css/style.css', document.baseURI).href;
+    doc.open();
+    doc.write(`<!doctype html><html lang="pt-BR" data-theme="light"><head><meta charset="utf-8">
+      <link rel="stylesheet" href="${FONTS}"><link rel="stylesheet" href="${css}">
+      <style>
+        html, body { background: #ffffff !important; margin: 0; padding: 0; min-height: 0; }
+        .pdf-page { width: ${RENDER_W}px; }
+        .results.stale { opacity: 1; }
+        .no-print { display: none !important; }
+        .svg-wrap { max-height: none !important; overflow: visible !important; }
+        .svg-wrap img { display: block; width: 100%; height: auto; }
+        .sheet, .panel, .stat, .card { box-shadow: none !important; }
+        .sheets { gap: 0; }
+      </style></head>
+      <body><main class="pdf-page"><section class="results" id="results"></section></main></body></html>`);
+    doc.close();
+    // Espera o CSS e as fontes.
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      if (doc.readyState === 'complete') setTimeout(done, 50);
+      else frame.addEventListener('load', done, { once: true });
+      setTimeout(done, 4000);
+    });
+    try { await doc.fonts.ready; } catch (e) { /* sem suporte */ }
+    await loadScript(HTML2CANVAS, doc);
+    return frame;
+  }
+
+  // Posições (px, a partir do topo do bloco) onde dá para quebrar a página.
+  function breakpoints(el) {
+    const top = el.getBoundingClientRect().top;
+    const pts = new Set();
+    el.querySelectorAll('tr, li, .svg-wrap, header, .sheet-stats, .cuts > summary, .cuts-help, .kv, .parts-list').forEach((n) => {
+      pts.add(Math.round(n.getBoundingClientRect().bottom - top));
+    });
+    return [...pts].sort((a, b) => a - b);
   }
 
   /**
-   * @param project  projeto (state do app)
-   * @param result   resultado do otimizador
-   * @param groups   chapas agrupadas [{ sheet, first, count }]
-   * @param o        { view, unit: {label, len, lenU, area, areaU}, priority, steps }
+   * @param resultsEl  o elemento #results da tela
+   * @param project    projeto (para o nome do arquivo e o rodapé)
    * @returns { blob, name }
    */
-  async function build(project, result, groups, o) {
-    await loadLibs();
-    const { fmt } = global.Render;
-    const { jsPDF } = global.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    const u = o.unit;
-    const st = result.stats;
-    const pieces = project.pieces;
-    const dims = (w, h) => `${fmt(w)} x ${fmt(h)} ${u.label}`;
-    const len = (v) => `${fmt(v)} ${u.label}`;
-    const pct = (x) => `${fmt(x * 100)}%`;
-    const color = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-    const font = (style, size) => { doc.setFont('helvetica', style); doc.setFontSize(size); };
-    const pieceName = (i) => clean((pieces[i] && pieces[i].name) || `Peça ${i + 1}`);
+  async function build(resultsEl, project) {
+    await loadJsPdf();
+    const frame = await makeFrame();
+    try {
+      const fdoc = frame.contentDocument;
+      const box = fdoc.getElementById('results');
 
-    // Cabeçalho de cada página
-    const header = (subtitulo) => {
-      // logo: chapa com linhas de corte
-      doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2]);
-      doc.roundedRect(M, 11, 13, 9, 1, 1, 'F');
-      doc.setDrawColor(255, 255, 255);
-      doc.setLineWidth(0.6);
-      doc.line(M + 5.5, 11, M + 5.5, 20);
-      doc.line(M + 5.5, 15.5, M + 13, 15.5);
-      font('bold', 14);
-      color(INK);
-      doc.text('Otimizador de Cortes', M + 17, 16);
-      font('normal', 9);
-      color(MUTED);
-      doc.text(clean(subtitulo), M + 17, 21.5);
-      font('bold', 8.5);
-      color(ACCENT);
-      doc.text('P L A N O   D E   C O R T E', PW - M, 15, { align: 'right' });
-      font('bold', 12);
-      color(INK);
-      doc.text(clean(project.name || 'Projeto'), PW - M, 21.5, { align: 'right' });
-      doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2]);
-      doc.setLineWidth(0.6);
-      doc.line(M, 26, PW - M, 26);
-    };
-
-    const tableBase = {
-      theme: 'plain',
-      margin: { left: M, right: M, top: 32, bottom: 14 },
-      styles: { font: 'helvetica', fontSize: 8.5, textColor: INK, cellPadding: { top: 1.5, bottom: 1.5, left: 2, right: 2 }, lineColor: LINE },
-      headStyles: { fillColor: ACCENT_SOFT, textColor: ACCENT, fontStyle: 'bold', fontSize: 7.8 },
-      didParseCell: (d) => { if (d.section === 'body') d.cell.styles.lineWidth = { bottom: 0.2 }; },
-    };
-
-    // ---------- Página 1: resumo e lista de peças ----------
-    const hoje = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
-    header(`Gerado em ${hoje}`);
-
-    const tipos = new Map();
-    result.sheets.forEach((s) => {
-      const k = `${s.name}|${s.L}|${s.W}`;
-      const t = tipos.get(k) || { nome: s.name, L: s.L, W: s.W, n: 0, area: 0, usada: 0 };
-      t.n++;
-      t.area += s.area;
-      t.usada += s.usedArea;
-      tipos.set(k, t);
-    });
-    doc.autoTable({
-      ...tableBase,
-      startY: 31,
-      tableWidth: 150,
-      head: [['Chapa', 'Medida', 'Qtd', 'Aproveitamento']],
-      body: [...tipos.values()].map((t) => [clean(t.nome || 'Chapa'), dims(t.L, t.W), String(t.n), pct(t.usada / t.area)]),
-      columnStyles: { 2: { halign: 'right', cellWidth: 14 }, 3: { halign: 'right', cellWidth: 30 } },
-    });
-
-    const numeros = [
-      ['Chapas utilizadas', String(st.sheetCount)],
-      ['Peças', `${st.partsPlaced} de ${st.partsTotal}`],
-      ['Aproveitamento', pct(st.efficiency)],
-      ['Área utilizada', `${fmt(st.usedArea / u.area)} ${u.areaU}`],
-      ['Área desperdiçada', `${fmt(st.wasteArea / u.area)} ${u.areaU}`],
-      ['Cortes', `${st.cutCount} (${fmt(st.cutLength / u.len)} ${u.lenU})`],
-      ['Espessura da serra', len(+project.kerf || 0)],
-      ['Refilo', len(+project.trim || 0)],
-      ['Veio', project.considerGrain ? 'Respeitado' : 'Ignorado'],
-      ['Prioridade', clean(o.priority)],
-    ];
-    let ny = 33;
-    numeros.forEach(([k, v]) => {
-      font('normal', 8.5);
-      color(MUTED);
-      doc.text(clean(k), 175, ny);
-      font('bold', 9.5);
-      color(INK);
-      doc.text(clean(v), PW - M, ny, { align: 'right' });
-      ny += 5.3;
-    });
-
-    let y = Math.max(doc.lastAutoTable.finalY, ny) + 6;
-    if (result.unplaced.length) {
-      font('bold', 9.5);
-      doc.setTextColor(180, 35, 24);
-      const faltam = result.unplaced.map((x) => `${pieceName(x.piece)} (${x.count})`).join(', ');
-      doc.splitTextToSize(clean(`Atenção: não couberam nas chapas disponíveis: ${faltam}`), PW - 2 * M).forEach((l) => { doc.text(l, M, y); y += 4.6; });
-      y += 2;
-    }
-
-    const stockName = (id) => {
-      const s = (project.stocks || []).find((x) => x.id === id);
-      return s ? s.name : 'Qualquer';
-    };
-    const veio = { length: 'Comprimento', width: 'Largura' };
-    font('bold', 10.5);
-    color(INK);
-    doc.text('Peças', M, y);
-    doc.autoTable({
-      ...tableBase,
-      startY: y + 2,
-      head: [['Peça', 'Comprimento', 'Largura', 'Qtd', 'Chapa', 'Veio']],
-      body: pieces.filter((p) => p.enabled !== false && +p.length > 0 && +p.width > 0 && +p.qty > 0).map((p) => [
-        clean(p.name || 'Peça'), len(+p.length), len(+p.width), String(p.qty), clean(stockName(p.stock)), veio[p.grain] || 'Livre',
-      ]),
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', cellWidth: 12 } },
-      didDrawPage: (d) => { if (d.pageNumber > 1) header('Peças (continuação)'); },
-    });
-
-    // ---------- Cada desenho de chapa: desenho + sequência de cortes ----------
-    const result_ = (r) => {
-      if (!r) return '-';
-      if (r.piece !== undefined) return `${pieceName(r.piece)} (${dims(r.w, r.h)})`;
-      if (r.kind === 'refilo') return 'refilo';
-      if (r.kind === 'sobra') return `${dims(r.w, r.h)} (sobra)`;
-      return dims(r.w, r.h);
-    };
-
-    for (let gi = 0; gi < groups.length; gi++) {
-      const g = groups[gi];
-      const s = g.sheet;
-      const quais = g.count > 1 ? `Chapas ${g.first} a ${g.first + g.count - 1}` : `Chapa ${g.first}`;
-      const sub = `${quais} de ${result.sheets.length}  |  ${s.name || 'Chapa'}  |  ${dims(s.L, s.W)}`
-        + `${g.count > 1 ? `  |  ${g.count} iguais` : ''}  |  aproveitamento ${pct(s.efficiency)}`;
-
-      doc.addPage();
-      header(sub);
-      const svg = global.Render.sheetSVG(s, pieces, { ...o.view, key: 'pdf' + gi, step: (o.steps && o.steps.get(gi)) || 0 });
-      const img = await sheetJpeg(svg, 2400);
-      const areaW = PW - 2 * M;
-      const areaH = PH - 32 - 22;
-      let w = areaW;
-      let h = w * img.ratio;
-      if (h > areaH) {
-        h = areaH;
-        w = h / img.ratio;
+      // Cópia do resultado: sem botões, com tudo aberto e os desenhos como imagem.
+      const copy = resultsEl.cloneNode(true);
+      copy.querySelectorAll('.no-print').forEach((n) => n.remove());
+      copy.querySelectorAll('details').forEach((d) => { d.open = true; });
+      const svgs = [...resultsEl.querySelectorAll('.svg-wrap svg')];
+      const copies = [...copy.querySelectorAll('.svg-wrap svg')];
+      for (let i = 0; i < svgs.length; i++) {
+        const img = document.createElement('img');
+        img.src = await svgToPng(svgs[i], 2000);
+        img.alt = '';
+        copies[i].replaceWith(img);
       }
-      doc.addImage(img.url, 'JPEG', (PW - w) / 2, 30, w, h);
+      box.innerHTML = copy.innerHTML;
+      await Promise.all([...box.querySelectorAll('img')].map((im) => (im.complete ? null : new Promise((r) => { im.onload = r; im.onerror = r; }))));
 
-      // Números da chapa embaixo do desenho
-      const waste = s.area - s.usedArea;
-      const linha = [
-        `Área utilizada ${fmt(s.usedArea / u.area)} ${u.areaU} (${pct(s.efficiency)})`,
-        `Sobra ${fmt(waste / u.area)} ${u.areaU} (${pct(waste / s.area)})`,
-        `${s.cuts.length} cortes (${fmt(s.cutLength / u.len)} ${u.lenU})`,
-        `${s.parts.length} ${s.parts.length === 1 ? 'peça' : 'peças'}`,
-        `${s.offcuts.length} ${s.offcuts.length === 1 ? 'sobra' : 'sobras'}`,
-      ].join('   |   ');
-      font('normal', 8.5);
-      color(MUTED);
-      doc.text(clean(linha), PW / 2, Math.min(30 + h + 7, PH - 14), { align: 'center' });
-
-      // Sequência de cortes
-      doc.addPage();
-      header(`Sequência de cortes  |  ${sub}`);
-      doc.autoTable({
-        ...tableBase,
-        startY: 31,
-        head: [['#', 'Painel', 'Corte', 'Resultado']],
-        body: s.cuts.map((c, i) => [
-          String(i + 1), dims(c.panel.w, c.panel.h), `${c.axis}=${len(c.pos)}`, clean(`${result_(c.a)}   \\   ${result_(c.b)}`),
-        ]),
-        columnStyles: { 0: { cellWidth: 10, textColor: MUTED }, 1: { cellWidth: 48 }, 2: { cellWidth: 34 } },
-        didDrawPage: (d) => { if (d.pageNumber > 1) header(`Sequência de cortes (continuação)  |  ${sub}`); },
+      // Partes que não devem ser cortadas no meio.
+      const blocks = [];
+      [...box.children].forEach((el) => {
+        if (el.classList.contains('sheets')) blocks.push(...el.children);
+        else blocks.push(el);
       });
-      font('normal', 7.5);
-      color(MUTED);
-      doc.text('y = corte horizontal, x = corte vertical, medidos a partir da borda de cima/esquerda do painel.', M, Math.min(doc.lastAutoTable.finalY + 5, PH - 10));
-    }
 
-    // Rodapé
-    const pages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= pages; p++) {
-      doc.setPage(p);
-      font('normal', 7.5);
-      color(MUTED);
-      doc.text(clean(`Otimizador de Cortes  |  ${project.name || ''}`), M, PH - 6);
-      doc.text(`Página ${p} de ${pages}`, PW - M, PH - 6, { align: 'right' });
-    }
-    doc.setProperties({ title: clean(`Plano de corte - ${project.name || 'projeto'}`), creator: 'Otimizador de Cortes' });
+      const { jsPDF } = global.jspdf;
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const k = (PAGE_W - 2 * MARGIN) / RENDER_W; // mm por px
+      const bottom = PAGE_H - MARGIN - FOOTER;
+      let y = MARGIN;
+      let first = true;
 
-    const name = `Plano de corte - ${clean(project.name || 'projeto').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'projeto'}.pdf`;
-    return { blob: doc.output('blob'), name };
+      const newPage = () => {
+        pdf.addPage();
+        y = MARGIN;
+      };
+
+      for (const el of blocks) {
+        if (!el.getBoundingClientRect().height) continue;
+        const canvas = await frame.contentWindow.html2canvas(el, {
+          scale: SCALE, backgroundColor: '#ffffff', logging: false, useCORS: true,
+          windowWidth: RENDER_W,
+        });
+        const rect = el.getBoundingClientRect();
+        const x = MARGIN + rect.left * k;
+        const wMm = rect.width * k;
+        const hPx = rect.height;
+        const pts = breakpoints(el);
+
+        // Cada chapa começa numa página nova (como na antiga impressão).
+        if (el.classList.contains('sheet') && y > MARGIN + 1) newPage();
+        else if (!first) y += GAP;
+        first = false;
+
+        // Cabe inteiro nesta página ou numa nova?
+        if (y + hPx * k > bottom && hPx * k <= bottom - MARGIN) newPage();
+
+        let from = 0; // px já desenhados do bloco
+        while (from < hPx - 1) {
+          const room = (bottom - y) / k; // px que cabem nesta página
+          let to = Math.min(hPx, from + room);
+          if (to < hPx) {
+            // quebra na última linha que cabe
+            const cut = pts.filter((p) => p > from + 40 && p <= to).pop();
+            if (cut) to = cut;
+            else if (y > MARGIN + 1) { newPage(); continue; }
+          }
+          const slice = document.createElement('canvas');
+          slice.width = canvas.width;
+          slice.height = Math.max(1, Math.round((to - from) * SCALE));
+          slice.getContext('2d').drawImage(canvas, 0, Math.round(from * SCALE), canvas.width, slice.height, 0, 0, canvas.width, slice.height);
+          const hMm = (to - from) * k;
+          pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', x, y, wMm, hMm);
+          y += hMm;
+          from = to;
+          if (from < hPx - 1) newPage();
+        }
+      }
+
+      // Rodapé
+      const pages = pdf.internal.getNumberOfPages();
+      for (let p = 1; p <= pages; p++) {
+        pdf.setPage(p);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(119, 108, 95);
+        pdf.text(clean(`Otimizador de Cortes  |  ${project.name || ''}`), MARGIN, PAGE_H - 7);
+        pdf.text(`Página ${p} de ${pages}`, PAGE_W - MARGIN, PAGE_H - 7, { align: 'right' });
+      }
+      pdf.setProperties({ title: clean(`Plano de corte - ${project.name || 'projeto'}`), creator: 'Otimizador de Cortes' });
+
+      const name = `Plano de corte - ${clean(project.name || 'projeto').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'projeto'}.pdf`;
+      return { blob: pdf.output('blob'), name };
+    } finally {
+      frame.remove();
+    }
   }
 
-  global.Pdf = { build, loadLibs };
+  global.Pdf = { build };
 })(window);

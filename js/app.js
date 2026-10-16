@@ -670,15 +670,11 @@
     }
   }
 
+  // O PDF tem o mesmo visual do resultado na tela (como a antiga impressão).
   async function makePdf() {
     if (!lastResult || !lastResult.sheets.length) throw new Error('calcule o plano de corte primeiro');
-    const u = UNITS[state.unit];
-    return Pdf.build(state, lastResult, $('#results')._groups, {
-      view: viewOpts(),
-      unit: { label: u.label, len: u.len, lenU: u.lenU, area: u.area, areaU: u.areaU },
-      priority: PRIORITIES[state.priority],
-      steps,
-    });
+    toast('Gerando o PDF…');
+    return Pdf.build($('#results'), state);
   }
 
   function pdfError(err) {

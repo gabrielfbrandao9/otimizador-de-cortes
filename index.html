@@ -40,10 +40,9 @@
     <div class="project">
       <div class="project-title">
         <input id="projectName" class="project-name" type="text" aria-label="Nome do projeto" placeholder="Nome do projeto">
-        <span id="saveStatus" class="save-status" aria-live="polite"></span>
+        <button type="button" id="saveStatus" class="save-status" aria-live="polite"></button>
       </div>
       <button type="button" class="btn" id="btnNew">Novo</button>
-      <button type="button" class="btn" id="btnSave">Salvar</button>
       <button type="button" class="btn" id="btnOpen">Abrir</button>
       <button type="button" class="btn" id="btnShare"><span class="lbl-long">Compartilhar</span><span class="lbl-short">Enviar</span></button>
       <details class="dropdown">
@@ -174,17 +173,11 @@
   <dialog id="dlgProjects">
     <form method="dialog" class="dlg">
       <div class="dlg-head">
-        <h2>Projetos salvos</h2>
+        <h2>Meus projetos</h2>
         <button class="icon" value="close" aria-label="Fechar">×</button>
       </div>
-      <section id="cloudSection" class="dlg-section" hidden>
-        <h3>Na nuvem</h3>
-        <ul id="cloudList" class="project-list"></ul>
-      </section>
-      <section class="dlg-section">
-        <h3>Neste navegador</h3>
-        <ul id="projectList" class="project-list"></ul>
-      </section>
+      <p class="muted dlg-text" id="projectsNote"></p>
+      <ul id="projectList" class="project-list"></ul>
     </form>
   </dialog>
 
@@ -239,6 +232,7 @@
   <script src="js/theme.js"></script>
   <script src="js/config.js"></script>
   <script src="js/cloud.js"></script>
+  <script src="js/projects.js"></script>
   <script src="js/optimizer.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/render.js"></script>

@@ -52,21 +52,21 @@
       check(await client.auth.signOut());
     },
 
-    async list() {
-      return check(await client.from(TABLE).select('id, name, updated_at').order('updated_at', { ascending: false }));
-    },
-
-    async load(id) {
-      return check(await client.from(TABLE).select('id, name, data').eq('id', id).single());
-    },
-
-    // Atualiza o projeto se ele existir (e for da pessoa); senão cria um novo. Retorna o id.
-    async save(id, name, data) {
-      if (id) {
-        const rows = check(await client.from(TABLE).update({ name, data }).eq('id', id).select('id'));
-        if (rows.length) return rows[0].id;
+    // Todos os projetos da conta.
+    async pullAll() {
+      const all = [];
+      for (let from = 0; ; from += 500) {
+        const rows = check(await client.from(TABLE).select('id, name, data, updated_at').order('id').range(from, from + 499));
+        all.push(...rows);
+        if (rows.length < 500) return all;
       }
-      return check(await client.from(TABLE).insert({ name, data }).select('id').single()).id;
+    },
+
+    // Cria ou atualiza projetos: [{ id, name, data }]
+    async push(rows) {
+      for (let i = 0; i < rows.length; i += 50) {
+        check(await client.from(TABLE).upsert(rows.slice(i, i + 50)));
+      }
     },
 
     async remove(id) {

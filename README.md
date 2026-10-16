@@ -16,8 +16,9 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 - **Visualização**: zoom, tamanho das letras, colorido ou sem cores, horizontal ou vertical e **ordem dos cortes** com passo a passo.
 - **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes e metros de corte.
 - **Salvar e exportar**:
-  - **projetos na nuvem** com login por Google ou e-mail, acessíveis de qualquer aparelho (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));
-  - salvamento automático e projetos nomeados no navegador (localStorage);
+  - **salvamento automático** a cada alteração, sem botão "Salvar": grava no aparelho na hora e sobe para a nuvem logo depois;
+  - **projetos na nuvem** com login por Google ou e-mail, sincronizados entre celular e computador: o app busca as mudanças de outros aparelhos ao abrir, ao voltar para ele e a cada 90 s (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));
+  - funciona sem internet: as alterações ficam pendentes e sobem quando a conexão volta;
   - exportar e importar o projeto em `.json`;
   - exportar e importar a lista de peças em `.csv` (abre no Excel);
   - baixar cada chapa como imagem `.png`;
@@ -65,7 +66,8 @@ Depois acesse http://localhost:8000.
 
 Por padrão os projetos ficam salvos só no navegador. Para ter login e projetos online,
 siga o passo a passo em **[SUPABASE.md](SUPABASE.md)** (gratuito, cerca de 15 minutos).
-Depois de configurado, aparece o botão **Entrar** no topo do site, e **Salvar** (ou Ctrl+S) envia o projeto para a nuvem.
+Depois de configurado, aparece o botão **Entrar** no topo do site. Com a conta conectada, cada alteração vai sozinha para a nuvem
+(o status aparece embaixo do nome do projeto; clicar nele ou Ctrl+S sincroniza na hora).
 
 ## Formato do CSV de peças
 

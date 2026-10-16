@@ -5,7 +5,6 @@
   'use strict';
 
   const KEY_CURRENT = 'otimizador:atual';
-  const KEY_PROJECTS = 'otimizador:projetos';
 
   function readJSON(key, fallback) {
     try {
@@ -29,26 +28,6 @@
     loadCurrent: () => readJSON(KEY_CURRENT, null),
     saveCurrent: (state) => writeJSON(KEY_CURRENT, state),
 
-    listProjects() {
-      const all = readJSON(KEY_PROJECTS, {});
-      return Object.keys(all)
-        .map((name) => ({ name, savedAt: all[name].savedAt }))
-        .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-    },
-    loadProject(name) {
-      const all = readJSON(KEY_PROJECTS, {});
-      return all[name] ? all[name].state : null;
-    },
-    saveProject(name, state) {
-      const all = readJSON(KEY_PROJECTS, {});
-      all[name] = { state, savedAt: Date.now() };
-      return writeJSON(KEY_PROJECTS, all);
-    },
-    deleteProject(name) {
-      const all = readJSON(KEY_PROJECTS, {});
-      delete all[name];
-      return writeJSON(KEY_PROJECTS, all);
-    },
 
     download(filename, content, mime) {
       const blob = content instanceof Blob ? content : new Blob([content], { type: mime || 'text/plain' });

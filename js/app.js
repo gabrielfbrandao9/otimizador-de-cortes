@@ -4,9 +4,10 @@
 (function () {
   'use strict';
 
-  const { Optimizer, Store, Render, Cloud } = window;
+  const { Optimizer, Store, Render, Cloud, Projects } = window;
   const { fmt, esc } = Render;
   const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   const UNITS = {
@@ -80,13 +81,16 @@
     if (!PRIORITIES[st.priority]) st.priority = 'waste';
     if (!ZOOMS.includes(st.zoom)) st.zoom = 1;
     if (!FONT_SCALES.includes(st.fontScale)) st.fontScale = 1;
-    st.cloudId = typeof st.cloudId === 'string' ? st.cloudId : null;
+    st.id = typeof st.id === 'string' && st.id ? st.id : (typeof st.cloudId === 'string' && st.cloudId) || Projects.uuid();
+    delete st.cloudId;
     return st;
   }
 
   let state = normalize(Store.loadCurrent() || defaultState());
   let lastResult = null;
   let calcTimer = null;
+  let saveTimer = null;
+  let refreshPending = false;
   let user = null;
 
   const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -106,13 +110,9 @@
     Store.saveCurrent(state);
   }
 
-  function setStatus(text) {
-    $('#saveStatus').textContent = text;
-  }
-
   function changed({ rerender } = {}) {
     persist();
-    setStatus('Alterações não salvas');
+    scheduleSave();
     if (rerender) renderInputs();
     updateCounts();
     markStale();
@@ -656,148 +656,234 @@
     await Render.svgToPng(svg, `${slug(state.name)}-chapa-${g.first}.png`);
   }
 
-  // ---------- Projetos ----------
+  // ---------- Projetos (salvamento automático) ----------
 
-  // Dados do projeto sem o vínculo com a nuvem (para salvar/exportar).
+  // Dados do projeto, sem o id (para salvar, exportar e compartilhar).
   function projectData() {
-    const { cloudId, ...data } = state;
+    const { id, ...data } = state;
     return data;
   }
 
-  async function save() {
-    let name = (state.name || '').trim();
-    if (!name) {
-      name = (prompt('Nome do projeto:') || '').trim();
-      if (!name) return;
-    }
-    state.name = name;
-    $('#projectName').value = name;
+  const hasContent = (s) => s.pieces.some((p) => +p.length > 0 && +p.width > 0);
 
-    if (user) {
-      setStatus('Salvando…');
-      try {
-        state.cloudId = await Cloud.save(state.cloudId, name, projectData());
-        persist();
-        setStatus(`Salvo na nuvem às ${timeFmt.format(new Date())}`);
-        toast(`“${name}” salvo na nuvem`);
-      } catch (err) {
-        Store.saveProject(name, projectData());
-        setStatus('Erro ao salvar na nuvem');
-        toast(`Não foi possível salvar na nuvem (${err.message}). Uma cópia ficou neste navegador.`);
-      }
-      return;
-    }
-
-    if (!Store.saveProject(name, projectData())) {
-      toast('Não foi possível salvar (armazenamento do navegador indisponível)');
-      return;
-    }
-    setStatus(`Salvo neste navegador às ${timeFmt.format(new Date())}`);
-    toast(Cloud.enabled ? `“${name}” salvo neste navegador. Entre na sua conta para salvar na nuvem.` : `“${name}” salvo neste navegador`);
+  // Cada alteração é gravada no aparelho e, logo depois, enviada para a nuvem.
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 400);
+    renderSync();
   }
 
-  function renderLocalList() {
-    const list = Store.listProjects();
-    const ul = $('#projectList');
-    if (!list.length) {
-      ul.innerHTML = '<li class="muted">Nenhum projeto salvo neste navegador.</li>';
-      return;
-    }
-    ul.innerHTML = list.map((p) => `<li>
-      <div><strong>${esc(p.name)}</strong><small>${p.savedAt ? dateFmt.format(p.savedAt) : ''}</small></div>
-      ${user ? `<button type="button" class="btn ghost" data-upload="${esc(p.name)}" title="Enviar uma cópia para a nuvem">Enviar p/ nuvem</button>` : ''}
-      <button type="button" class="btn" data-open="${esc(p.name)}">Abrir</button>
-      <button type="button" class="icon" data-del="${esc(p.name)}" aria-label="Excluir">×</button>
-    </li>`).join('');
+  function flushSave() {
+    if (!saveTimer) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    Projects.put(state.id, (state.name || '').trim() || 'Sem nome', projectData());
+    renderSync();
   }
 
-  async function renderCloudList() {
-    const section = $('#cloudSection');
-    section.hidden = !Cloud.enabled;
-    if (!Cloud.enabled) return;
-    const ul = $('#cloudList');
-    if (!user) {
-      ul.innerHTML = '<li class="muted"><div>Entre na sua conta para salvar projetos na nuvem e abri-los em qualquer aparelho.</div><button type="button" class="btn" data-act="login">Entrar</button></li>';
-      return;
-    }
-    ul.innerHTML = '<li class="muted">Carregando…</li>';
-    try {
-      const rows = await Cloud.list();
-      ul.innerHTML = rows.length
-        ? rows.map((r) => {
-          const current = r.id === state.cloudId;
-          return `<li${current ? ' class="current"' : ''}>
-            <div><strong>${esc(r.name)}</strong><small>${dateFmt.format(new Date(r.updated_at))}${current ? ' · aberto agora' : ''}</small></div>
-            <button type="button" class="btn" data-cloud-open="${esc(r.id)}">Abrir</button>
-            <button type="button" class="icon" data-cloud-del="${esc(r.id)}" data-name="${esc(r.name)}" aria-label="Excluir">×</button>
-          </li>`;
-        }).join('')
-        : '<li class="muted">Nenhum projeto na nuvem ainda. Clique em “Salvar” para enviar o projeto atual.</li>';
-    } catch (err) {
-      ul.innerHTML = `<li class="muted">Erro ao carregar: ${esc(err.message)}</li>`;
-    }
+  function renderSync() {
+    const el = $('#saveStatus');
+    const st = Projects.status();
+    const pend = Projects.pendingCount();
+    let text;
+    let mode = st;
+    if (saveTimer) { text = 'Salvando…'; mode = 'saving'; }
+    else if (!Cloud.enabled) { text = '✓ Salvo no aparelho'; mode = 'saved'; }
+    else if (!user) { text = 'Salvo só neste aparelho · entrar'; mode = 'local'; }
+    else if (st === 'saving') text = 'Salvando na nuvem…';
+    else if (st === 'saved') text = '✓ Salvo na nuvem';
+    else if (st === 'offline') text = pend ? `Sem internet · ${pend} pendente${pend > 1 ? 's' : ''}` : 'Sem internet';
+    else if (st === 'error') text = 'Erro ao salvar · tentar de novo';
+    else text = '✓ Salvo no aparelho';
+    el.textContent = text;
+    el.dataset.state = mode;
+    el.title = mode === 'error' && Projects.lastError()
+      ? `Erro: ${Projects.lastError().message || Projects.lastError()}. Clique para tentar de novo.`
+      : user ? 'Clique para sincronizar agora' : (Cloud.enabled ? 'Entre na sua conta para guardar na nuvem' : '');
   }
 
-  function openProjects() {
-    renderLocalList();
-    $('#dlgProjects').showModal();
-    renderCloudList();
+  function onSyncStatusClick() {
+    if (Cloud.enabled && !user) return openLogin();
+    flushSave();
+    Projects.sync(true);
   }
 
-  async function onProjectsClick(e) {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const d = btn.dataset;
-    try {
-      if (d.open) {
-        const s = Store.loadProject(d.open);
-        $('#dlgProjects').close();
-        // Cópia local não fica vinculada a um projeto da nuvem.
-        if (s) loadState({ ...s, cloudId: null }, `“${d.open}” aberto`);
-      } else if (d.del) {
-        e.preventDefault();
-        if (confirm(`Excluir “${d.del}” deste navegador?`)) {
-          Store.deleteProject(d.del);
-          renderLocalList();
-        }
-      } else if (d.upload) {
-        e.preventDefault();
-        const s = Store.loadProject(d.upload);
-        if (!s) return;
-        btn.disabled = true;
-        const { cloudId, ...data } = normalize(s);
-        await Cloud.save(null, d.upload, data);
-        toast(`“${d.upload}” enviado para a nuvem`);
-        btn.disabled = false;
-        renderCloudList();
-      } else if (d.cloudOpen) {
-        btn.disabled = true;
-        const row = await Cloud.load(d.cloudOpen);
-        $('#dlgProjects').close();
-        loadState({ ...row.data, name: row.name, cloudId: row.id }, `“${row.name}” aberto da nuvem`);
-        setStatus('Aberto da nuvem');
-      } else if (d.cloudDel) {
-        e.preventDefault();
-        if (!confirm(`Excluir “${d.name}” da nuvem? Isso não pode ser desfeito.`)) return;
-        await Cloud.remove(d.cloudDel);
-        if (state.cloudId === d.cloudDel) { state.cloudId = null; persist(); }
-        toast('Projeto excluído da nuvem');
-        renderCloudList();
-      }
-    } catch (err) {
-      btn.disabled = false;
-      toast('Erro: ' + err.message);
-    }
-  }
-
+  // Troca o projeto aberto (o anterior já está salvo).
   function loadState(s, msg) {
     state = normalize(s);
     persist();
     renderInputs();
-    setStatus('');
     lastResult = null;
+    steps.clear();
     calculate();
+    renderSync();
     if (msg) toast(msg);
+  }
+
+  // Abre dados recebidos (exemplo, arquivo, link) como um projeto novo.
+  function openAsNew(data, msg) {
+    flushSave();
+    const { id, cloudId, ...rest } = data;
+    loadState({ ...rest, id: Projects.uuid() }, msg);
+    Projects.put(state.id, (state.name || '').trim() || 'Sem nome', projectData());
+  }
+
+  function newProject() {
+    flushSave();
+    loadState({
+      ...defaultState(),
+      id: Projects.uuid(),
+      name: 'Novo projeto',
+      pieces: [{ id: uid(), name: '', length: '', width: '', qty: 1, grain: 'none' }],
+    });
+  }
+
+  function openProject(id) {
+    if (id === state.id) return;
+    const data = Projects.get(id);
+    if (!data) return;
+    flushSave();
+    loadState({ ...data, id }, `“${data.name}” aberto`);
+  }
+
+  // Projeto aberto foi excluído (aqui ou em outro aparelho): abre o mais recente ou um novo.
+  function leaveDeletedProject() {
+    const next = Projects.list()[0];
+    if (next) loadState({ ...Projects.get(next.id), id: next.id });
+    else newProject();
+  }
+
+  function renderProjectList() {
+    const list = Projects.list();
+    const note = !Cloud.enabled
+      ? 'Os projetos são salvos automaticamente neste aparelho.'
+      : user
+        ? `Salvos automaticamente neste aparelho e na nuvem (${esc(user.email || 'sua conta')}). Aparecem em todos os aparelhos em que você entrar.`
+        : 'Salvos automaticamente neste aparelho. <button type="button" class="link" data-act="login">Entre na sua conta</button> para guardar na nuvem e abrir em outros aparelhos.';
+    $('#projectsNote').innerHTML = note;
+    const ul = $('#projectList');
+    if (!list.length) {
+      ul.innerHTML = '<li class="muted">Nenhum projeto ainda. Eles aparecem aqui assim que você começa a editar.</li>';
+      return;
+    }
+    ul.innerHTML = list.map((p) => {
+      const current = p.id === state.id;
+      const where = !user ? '' : p.nuvem && !p.pendente ? ' · ☁ na nuvem' : ' · enviando…';
+      return `<li${current ? ' class="current"' : ''}>
+        <div><strong>${esc(p.name)}</strong><small>${dateFmt.format(p.alterado_em)}${where}${current ? ' · aberto agora' : ''}</small></div>
+        ${current ? '' : `<button type="button" class="btn" data-open="${esc(p.id)}">Abrir</button>`}
+        <button type="button" class="icon" data-del="${esc(p.id)}" data-name="${esc(p.name)}" aria-label="Excluir">×</button>
+      </li>`;
+    }).join('');
+  }
+
+  function openProjects() {
+    flushSave();
+    renderProjectList();
+    $('#dlgProjects').showModal();
+    if (user) Projects.sync(true);
+  }
+
+  function onProjectsClick(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const d = btn.dataset;
+    if (d.open) {
+      $('#dlgProjects').close();
+      openProject(d.open);
+    } else if (d.del) {
+      e.preventDefault();
+      const where = user ? 'deste aparelho e da nuvem' : 'deste aparelho';
+      if (!confirm(`Excluir “${d.name}” ${where}? Isso não pode ser desfeito.`)) return;
+      if (d.del === state.id) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      Projects.remove(d.del);
+      if (d.del === state.id) leaveDeletedProject();
+      renderProjectList();
+      toast('Projeto excluído');
+    }
+  }
+
+  function isTyping() {
+    const a = document.activeElement;
+    return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !a.closest('dialog');
+  }
+
+  // Chegaram alterações de outro aparelho.
+  function onRemoteChange(ids) {
+    if ($('#dlgProjects').open) renderProjectList();
+    if (ids.length && !ids.includes(state.id)) return;
+    if (saveTimer) return; // há alteração local ainda não salva: ela vence
+    const data = Projects.get(state.id);
+    if (!data) {
+      if (!hasContent(state) || Projects.list().length) {
+        toast(`O projeto “${state.name || 'sem nome'}” foi excluído em outro aparelho.`);
+        leaveDeletedProject();
+      }
+      return;
+    }
+    if (isTyping() || $$('dialog[open]').some((dlg) => dlg.id !== 'dlgProjects')) {
+      if (!refreshPending) {
+        refreshPending = true;
+        waitAndRefresh();
+      }
+      return;
+    }
+    refreshPending = false;
+    if (JSON.stringify(normalize({ ...data, id: state.id })) === JSON.stringify(state)) return;
+    const y = window.scrollY;
+    loadState({ ...data, id: state.id });
+    window.scrollTo(0, y);
+  }
+
+  // Espera a pessoa terminar de digitar (ou fechar a janela aberta) para aplicar o que chegou.
+  function waitAndRefresh() {
+    setTimeout(() => {
+      if (!refreshPending) return;
+      if (isTyping() || $$('dialog[open]').some((dlg) => dlg.id !== 'dlgProjects')) return waitAndRefresh();
+      refreshPending = false;
+      onRemoteChange([state.id]);
+    }, 1000);
+  }
+
+  function bindProjects() {
+    Projects.on((ev) => {
+      if (ev.type === 'status') renderSync();
+      if (ev.type === 'change' && ev.source === 'remote') onRemoteChange(ev.ids);
+      if (ev.type === 'change' && ev.source === 'local' && $('#dlgProjects').open) renderProjectList();
+    });
+    $('#saveStatus').addEventListener('click', onSyncStatusClick);
+
+    // Aplica as alterações de outro aparelho que chegaram enquanto a pessoa digitava.
+    document.addEventListener('focusout', () => {
+      setTimeout(() => { if (refreshPending && !isTyping()) onRemoteChange([state.id]); }, 250);
+    });
+
+    // Ao voltar para o app, busca o que mudou em outro aparelho; ao sair, envia o que falta.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') Projects.sync(true);
+      else { flushSave(); Projects.flush(); }
+    });
+    window.addEventListener('pagehide', flushSave);
+    window.addEventListener('online', () => Projects.sync(true));
+    setInterval(() => { if (document.visibilityState === 'visible' && user) Projects.sync(true); }, 90000);
+
+    // Abre o projeto com a versão mais recente salva no aparelho (pode ter chegado de outro aparelho).
+    const saved = Projects.get(state.id);
+    if (saved) {
+      const fresh = normalize({ ...saved, id: state.id });
+      if (JSON.stringify(fresh) !== JSON.stringify(state)) {
+        state = fresh;
+        persist();
+        renderInputs();
+      }
+    } else if (hasContent(state)) {
+      // Primeira vez com esta versão: o projeto aberto entra na lista.
+      Projects.put(state.id, (state.name || '').trim() || 'Sem nome', projectData());
+    }
+    renderSync();
   }
 
   // ---------- App no celular: abas, instalação e modo offline ----------
@@ -946,12 +1032,8 @@
       return;
     }
     const name = data.name || 'Projeto compartilhado';
-    const hasCurrent = state.pieces.some((p) => +p.length > 0 && +p.width > 0);
-    if (hasCurrent && !confirm(`Abrir o projeto compartilhado “${name}”?\n\nEle vai substituir o projeto aberto agora (“${state.name || 'sem nome'}”). Se precisar dele, cancele e salve-o antes.`)) {
-      return;
-    }
     history.replaceState(null, '', location.pathname + location.search);
-    loadState({ ...data, cloudId: null }, `Projeto compartilhado “${name}” aberto. Clique em Salvar para guardar sua cópia.`);
+    openAsNew(data, `Projeto compartilhado “${name}” aberto e salvo nos seus projetos.`);
   }
 
   // ---------- Conta ----------
@@ -1049,12 +1131,12 @@
         if ($('#dlgLogin').open) $('#dlgLogin').close();
         toast(`Conectado como ${u.email || 'usuário'}`);
       }
-      if (!u && previous) {
-        state.cloudId = null;
-        persist();
-        setStatus('');
+      if ((u && u.id) !== (previous && previous.id)) {
+        flushSave();
+        Projects.setUser(u);
       }
-      if ($('#dlgProjects').open) { renderLocalList(); renderCloudList(); }
+      renderSync();
+      if ($('#dlgProjects').open) renderProjectList();
     });
   }
 
@@ -1081,12 +1163,10 @@
         if (!f) return;
         const data = JSON.parse(await Store.readFile(f));
         if (!data || !Array.isArray(data.pieces)) throw new Error('arquivo não parece ser um projeto');
-        loadState({ ...data, cloudId: null }, 'Projeto importado');
+        openAsNew(data, `Projeto “${data.name || 'importado'}” importado`);
       } else if (kind === 'example-wardrobe') {
         const data = await (await fetch('exemplos/guarda-roupa-4-portas-4-gavetas.json')).json();
-        const hasCurrent = state.pieces.some((p) => +p.length > 0 && +p.width > 0);
-        if (hasCurrent && !confirm(`Abrir o exemplo “${data.name}”?\n\nEle vai substituir o projeto aberto agora (“${state.name || 'sem nome'}”). Se precisar dele, cancele e salve-o antes.`)) return;
-        loadState({ ...data, cloudId: null }, `Exemplo “${data.name}” aberto`);
+        openAsNew(data, `Exemplo “${data.name}” aberto`);
       } else if (kind === 'import-csv') {
         const f = await pickFile('.csv,text/csv,.txt');
         if (!f) return;
@@ -1131,7 +1211,7 @@
     $('#projectName').addEventListener('input', (e) => {
       state.name = e.target.value;
       persist();
-      setStatus('Alterações não salvas');
+      scheduleSave();
       const title = $('.results-head h2');
       if (title) title.textContent = state.name || 'Plano de corte';
     });
@@ -1159,15 +1239,7 @@
       document.querySelectorAll('#results details').forEach((d) => { d.open = true; });
     });
 
-    $('#btnNew').addEventListener('click', () => {
-      if (!confirm('Começar um projeto novo? As alterações não salvas serão perdidas.')) return;
-      loadState({
-        ...defaultState(),
-        name: 'Novo projeto',
-        pieces: [{ id: uid(), name: '', length: '', width: '', qty: 1, grain: 'none' }],
-      });
-    });
-    $('#btnSave').addEventListener('click', save);
+    $('#btnNew').addEventListener('click', newProject);
     $('#btnOpen').addEventListener('click', openProjects);
     $('#btnShare').addEventListener('click', openShare);
     $('#btnCopyLink').addEventListener('click', copyShareLink);
@@ -1179,7 +1251,7 @@
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        save();
+        onSyncStatusClick();
       }
     });
 
@@ -1200,6 +1272,7 @@
       if (!k) return;
       state[k] = e.target.checked;
       persist();
+      scheduleSave();
       renderResults();
     });
     results.addEventListener('click', async (e) => {
@@ -1208,15 +1281,18 @@
       if (btn.dataset.zoom) {
         state.zoom = nextIn(ZOOMS, state.zoom, +btn.dataset.zoom);
         persist();
+        scheduleSave();
         applyZoom();
       } else if (btn.dataset.font) {
         state.fontScale = nextIn(FONT_SCALES, state.fontScale, +btn.dataset.font);
         persist();
+        scheduleSave();
         renderResults();
         results.querySelector(`[data-font="${btn.dataset.font}"]`).focus();
       } else if (btn.dataset.set) {
         state[btn.dataset.set] = btn.dataset.val === 'true';
         persist();
+        scheduleSave();
         renderResults();
         results.querySelector(`[data-set="${btn.dataset.set}"][data-val="${btn.dataset.val}"]`).focus();
       } else if (btn.dataset.step !== undefined) {
@@ -1241,6 +1317,7 @@
 
   renderInputs();
   bind();
+  bindProjects();
   bindApp();
   renderAccount();
   bindAccount();

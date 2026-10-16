@@ -211,7 +211,7 @@
 
   /**
    * @param {object} input
-   *   pieces: [{ name, length, width, qty, grain: 'none'|'length'|'width', edges: {c1,c2,l1,l2} }]
+   *   pieces: [{ name, length, width, qty, grain: 'none'|'length'|'width' }]
    *   stocks: [{ name, length, width, qty }]
    *   kerf, trim: números (mesma unidade das medidas)
    *   considerGrain: boolean
@@ -254,7 +254,7 @@
   }
 
   function finalize(res, stocks, input, trim) {
-    let totalArea = 0, usedArea = 0, cutCount = 0, cutLength = 0, edgeLength = 0;
+    let totalArea = 0, usedArea = 0, cutCount = 0, cutLength = 0;
 
     const sheets = res.sheets.map((s) => {
       // Pedaços que nunca foram cortados de novo são sobras; os demais são painéis intermediários.
@@ -285,12 +285,6 @@
       usedArea += used;
       cutCount += cuts.length;
       cutLength += sheetCutLength;
-      for (const p of s.parts) {
-        const piece = input.pieces[p.piece];
-        const e = piece.edges || {};
-        edgeLength += ((e.c1 ? 1 : 0) + (e.c2 ? 1 : 0)) * +piece.length;
-        edgeLength += ((e.l1 ? 1 : 0) + (e.l2 ? 1 : 0)) * +piece.width;
-      }
       return {
         stockIndex: stocks[s.stock].index,
         name: stocks[s.stock].name,
@@ -323,7 +317,6 @@
         efficiency: totalArea ? usedArea / totalArea : 0,
         cutCount,
         cutLength,
-        edgeLength,
         partsPlaced,
         partsTotal: partsPlaced + res.unplaced.length,
       },

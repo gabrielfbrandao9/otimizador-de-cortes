@@ -73,9 +73,11 @@
   };
 
   // ---------- CSV ----------
-  // Colunas: nome;comprimento;largura;quantidade;veio;fita_c1;fita_c2;fita_l1;fita_l2;chapa;ativa
+  // Colunas: nome;comprimento;largura;quantidade;veio;chapa;ativa
+  // CSVs antigos tinham 4 colunas de fita de borda (fita_c1..fita_l2) depois do veio;
+  // elas são ignoradas na importação.
 
-  const CSV_HEADER = ['nome', 'comprimento', 'largura', 'quantidade', 'veio', 'fita_c1', 'fita_c2', 'fita_l1', 'fita_l2', 'chapa', 'ativa'];
+  const CSV_HEADER = ['nome', 'comprimento', 'largura', 'quantidade', 'veio', 'chapa', 'ativa'];
   const GRAIN_TO_CSV = { none: 'livre', length: 'comprimento', width: 'largura' };
 
   function detectDelimiter(line) {
@@ -124,7 +126,10 @@
     if (!lines.length) return [];
     const d = detectDelimiter(lines[0]);
     const rows = lines.map((l) => splitLine(l, d));
-    if (rows.length && isNaN(num(rows[0][1], d))) rows.shift(); // cabeçalho
+    const header = rows.length && isNaN(num(rows[0][1], d)) ? rows.shift() : null;
+    // Formato antigo: com as colunas fita_*, a chapa e o "ativa" ficam 4 posições adiante.
+    const old = header ? /^fita/i.test(header[5] || '') : rows.some((r) => r.length > 7);
+    const k = old ? 9 : 5;
     return rows
       .map((r) => ({
         name: r[0] || '',
@@ -132,9 +137,8 @@
         width: num(r[2], d),
         qty: Math.max(1, Math.round(num(r[3], d)) || 1),
         grain: parseGrain(r[4]),
-        edges: { c1: bool(r[5]), c2: bool(r[6]), l1: bool(r[7]), l2: bool(r[8]) },
-        stockName: r[9] || '',
-        enabled: r[10] == null || r[10] === '' || bool(r[10]),
+        stockName: r[k] || '',
+        enabled: r[k + 1] == null || r[k + 1] === '' || bool(r[k + 1]),
       }))
       .filter((p) => p.length > 0 && p.width > 0);
   }
@@ -148,10 +152,9 @@
     const stockName = (id) => ((stocks || []).find((s) => s.id === id) || {}).name || '';
     const lines = [CSV_HEADER.join(';')];
     for (const p of pieces) {
-      const e = p.edges || {};
       lines.push([
         p.name, p.length, p.width, p.qty, GRAIN_TO_CSV[p.grain] || 'livre',
-        e.c1 ? 1 : 0, e.c2 ? 1 : 0, e.l1 ? 1 : 0, e.l2 ? 1 : 0, stockName(p.stock), p.enabled === false ? 0 : 1,
+        stockName(p.stock), p.enabled === false ? 0 : 1,
       ].map(csvCell).join(';'));
     }
     return '﻿' + lines.join('\r\n');

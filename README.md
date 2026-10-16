@@ -12,10 +12,9 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 - **Ativar e desativar** peças e chapas com uma caixa de seleção, sem precisar apagá-las.
 - **Espessura da serra** (kerf) e **refilo** das bordas da chapa.
 - **Veio da madeira**: cada peça pode ser *livre* (pode girar), seguir o comprimento ou seguir a largura da chapa.
-- **Fita de borda**: clique nas bordas do mini-desenho de cada peça. O total em metros é calculado.
-- **Diagrama visual** com nomes, medidas, fita de borda, sobras e linhas de corte. Chapas iguais são agrupadas (×N).
+- **Diagrama visual** com nomes, medidas, sobras e linhas de corte. Chapas iguais são agrupadas (×N).
 - **Visualização**: zoom, tamanho das letras, colorido ou sem cores, horizontal ou vertical e **ordem dos cortes** com passo a passo.
-- **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes, metros de corte e de fita.
+- **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes e metros de corte.
 - **Salvar e exportar**:
   - **projetos na nuvem** com login por Google ou e-mail, acessíveis de qualquer aparelho (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));
   - salvamento automático e projetos nomeados no navegador (localStorage);
@@ -73,16 +72,17 @@ Depois de configurado, aparece o botão **Entrar** no topo do site, e **Salvar**
 Separador `;` (padrão do Excel em português) ou `,`. A primeira linha pode ser um cabeçalho.
 
 ```
-nome;comprimento;largura;quantidade;veio;fita_c1;fita_c2;fita_l1;fita_l2;chapa
-Lateral;720;550;2;comprimento;1;0;0;0;MDF 18mm
-Porta;716;397;4;comprimento;1;1;1;1;MDF 18mm
-Fundo;780;700;1;livre;0;0;0;0;HDF 3mm
+nome;comprimento;largura;quantidade;veio;chapa
+Lateral;720;550;2;comprimento;MDF 18mm
+Porta;716;397;4;comprimento;MDF 18mm
+Fundo;780;700;1;livre;HDF 3mm
 ```
 
 - `veio`: `livre`, `comprimento` ou `largura`.
-- `fita_*`: `1` (tem fita) ou `0`. `c1`/`c2` são as bordas do comprimento e `l1`/`l2` as da largura.
 - `chapa` (opcional): o nome de uma chapa cadastrada no projeto. Vazio = qualquer chapa.
 - `ativa` (opcional): `0` para importar a peça desativada. Vazio ou `1` = ativa.
+
+CSVs antigos, com as colunas `fita_c1;fita_c2;fita_l1;fita_l2` depois do `veio`, continuam sendo importados; essas colunas são ignoradas.
 
 Há um exemplo em [`exemplos/pecas-exemplo.csv`](exemplos/pecas-exemplo.csv).
 

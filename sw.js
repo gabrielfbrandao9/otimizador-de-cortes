@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [
@@ -67,8 +67,9 @@ function isCacheableCdn(url) {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
   try {
+    // "no-cache": confere com o servidor, para nunca misturar HTML novo com CSS/JS antigos.
     const response = await Promise.race([
-      fetch(request),
+      fetch(request, { cache: 'no-cache' }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), NETWORK_TIMEOUT)),
     ]);
     if (response.ok) cache.put(request, response.clone());

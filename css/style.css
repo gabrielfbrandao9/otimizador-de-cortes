@@ -628,17 +628,20 @@ a.brand + .theme-btn { margin-left: auto; }
 
 /* ---------- Responsivo ---------- */
 
-@media (max-width: 1320px) {
-  .brand p, .user-email { display: none; }
+/* No topo a conta mostra só a foto (o e-mail aparece ao passar o mouse). */
+.topbar .user-email { display: none; }
+
+@media (max-width: 1440px) {
+  .brand p { display: none; }
 }
 
-@media (max-width: 1140px) {
+@media (max-width: 1320px) {
   .tb-btn > span { display: none; }
   .tb-btn { padding: 0 9px; }
   .tb-btn .caret { display: none; }
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .brand-text { display: none; }
   .sync { width: 30px; height: 30px; padding: 0; justify-content: center; }
   .sync .sync-text { display: none; }

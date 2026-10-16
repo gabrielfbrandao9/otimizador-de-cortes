@@ -26,28 +26,27 @@
   <header class="topbar">
     <div class="brand">
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="2"/><path d="M14 6v20M14 15h16"/></svg>
-      <div>
+      <div class="brand-text">
         <h1>Otimizador de Cortes</h1>
         <p>Plano de corte para chapas</p>
       </div>
     </div>
-    <button type="button" class="theme-btn" id="btnTheme" aria-label="Mudar para o modo escuro" title="Mudar para o modo escuro">
-      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
-    </button>
-    <span id="netStatus" class="net-badge" hidden>Sem internet</span>
-    <button type="button" class="btn primary install-btn" id="btnInstall" hidden>Instalar app</button>
+
     <div class="project">
-      <div class="project-title">
-        <input id="projectName" class="project-name" type="text" aria-label="Nome do projeto" placeholder="Nome do projeto">
-        <button type="button" id="saveStatus" class="save-status" aria-live="polite"></button>
-      </div>
-      <button type="button" class="btn" id="btnNew">Novo</button>
-      <button type="button" class="btn" id="btnOpen">Abrir</button>
-      <button type="button" class="btn" id="btnShare"><span class="lbl-long">Compartilhar</span><span class="lbl-short">Enviar</span></button>
+      <input id="projectName" class="project-name" type="text" aria-label="Nome do projeto" placeholder="Nome do projeto">
+      <button type="button" class="tb-btn" id="btnNew" title="Novo projeto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M13 11v6M10 14h6"/></svg><span>Novo</span></button>
+      <button type="button" class="tb-btn" id="btnOpen" title="Meus projetos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><span>Abrir</span></button>
+      <button type="button" class="tb-btn" id="btnShare" title="Compartilhar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></svg><span>Compartilhar</span></button>
       <details class="dropdown">
-        <summary class="btn">Arquivo ▾</summary>
+        <summary class="tb-btn" title="Arquivo e mais opções"><svg class="ico-file" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2h-6.5L9.5 5H6a2 2 0 0 0-2 2.5z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg><svg class="ico-more" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg><span>Arquivo</span><svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
         <div class="menu">
+          <div class="mobile-only">
+            <button type="button" data-menu="new">Novo projeto</button>
+            <button type="button" data-menu="open">Meus projetos</button>
+            <button type="button" data-menu="share">Compartilhar</button>
+            <button type="button" data-menu="install" id="menuInstall" hidden>Instalar app</button>
+            <hr>
+          </div>
           <button type="button" data-file="export-json">Exportar projeto (.json)</button>
           <button type="button" data-file="import-json">Importar projeto (.json)</button>
           <hr>
@@ -55,8 +54,19 @@
           <button type="button" data-file="import-csv">Importar peças (.csv)</button>
           <hr>
           <button type="button" data-file="example-wardrobe">Exemplo: guarda-roupa 4 portas e 4 gavetas</button>
+          <div class="mobile-only" id="menuAccount" hidden></div>
         </div>
       </details>
+    </div>
+
+    <div class="top-right">
+      <span id="netStatus" class="net-badge" hidden>Sem internet</span>
+      <button type="button" id="saveStatus" class="sync" aria-live="polite"></button>
+      <button type="button" class="btn primary install-btn" id="btnInstall" hidden>Instalar app</button>
+    <button type="button" class="theme-btn" id="btnTheme" aria-label="Mudar para o modo escuro" title="Mudar para o modo escuro">
+      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+    </button>
       <div class="account" id="account" hidden></div>
     </div>
   </header>

@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [

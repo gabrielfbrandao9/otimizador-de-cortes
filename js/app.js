@@ -695,7 +695,8 @@
     else if (st === 'offline') text = pend ? `Sem internet · ${pend} pendente${pend > 1 ? 's' : ''}` : 'Sem internet';
     else if (st === 'error') text = 'Erro ao salvar · tentar de novo';
     else text = '✓ Salvo no aparelho';
-    el.textContent = text;
+    el.innerHTML = `<span class="sync-text">${esc(text)}</span>`;
+    el.setAttribute('aria-label', text);
     el.dataset.state = mode;
     el.title = mode === 'error' && Projects.lastError()
       ? `Erro: ${Projects.lastError().message || Projects.lastError()}. Clique para tentar de novo.`
@@ -703,6 +704,7 @@
   }
 
   function onSyncStatusClick() {
+    if (mobile.matches) toast($('#saveStatus').textContent);
     if (Cloud.enabled && !user) return openLogin();
     flushSave();
     Projects.sync(true);
@@ -935,6 +937,7 @@
       e.preventDefault();
       installPrompt = e;
       $('#btnInstall').hidden = false;
+      $('#menuInstall').hidden = false;
     });
     $('#btnInstall').addEventListener('click', async () => {
       if (!installPrompt) return;
@@ -942,9 +945,11 @@
       await installPrompt.userChoice.catch(() => null);
       installPrompt = null;
       $('#btnInstall').hidden = true;
+      $('#menuInstall').hidden = true;
     });
     window.addEventListener('appinstalled', () => {
       $('#btnInstall').hidden = true;
+      $('#menuInstall').hidden = true;
       toast('App instalado! Procure “Cortes” na tela inicial.');
     });
 
@@ -1040,8 +1045,13 @@
 
   function renderAccount() {
     const box = $('#account');
+    const menu = $('#menuAccount');
     box.hidden = !Cloud.enabled;
+    menu.hidden = !Cloud.enabled;
     if (!Cloud.enabled) return;
+    menu.innerHTML = user
+      ? `<hr><button type="button" data-act="logout">Sair da conta <small class="muted">(${esc(user.email || '')})</small></button>`
+      : '<hr><button type="button" data-act="login">Entrar na conta</button>';
     if (!user) {
       box.innerHTML = '<button type="button" class="btn" data-act="login">Entrar</button>';
       return;
@@ -1257,10 +1267,14 @@
 
     const dropdown = $('.dropdown');
     dropdown.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-file]');
+      const btn = e.target.closest('.menu button');
       if (!btn) return;
       dropdown.open = false;
-      fileAction(btn.dataset.file);
+      if (btn.dataset.file) fileAction(btn.dataset.file);
+      else if (btn.dataset.menu === 'new') newProject();
+      else if (btn.dataset.menu === 'open') openProjects();
+      else if (btn.dataset.menu === 'share') openShare();
+      else if (btn.dataset.menu === 'install') $('#btnInstall').click();
     });
     document.addEventListener('click', (e) => {
       if (dropdown.open && !dropdown.contains(e.target)) dropdown.open = false;

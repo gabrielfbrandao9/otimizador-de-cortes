@@ -86,7 +86,12 @@
     return st;
   }
 
-  let state = normalize(Store.loadCurrent() || defaultState());
+  // Modo embutido (endereço com ?embed): o orcamento-marcenaria abre o Otimizador
+  // escondido para gerar o PDF de um projeto. Nesse modo nada é carregado nem
+  // salvo (nem no aparelho nem na nuvem) e o projeto aberto não é tocado.
+  const EMBED = new URLSearchParams(location.search).has('embed');
+
+  let state = normalize((!EMBED && Store.loadCurrent()) || defaultState());
   let lastResult = null;
   let calcTimer = null;
   let saveTimer = null;
@@ -107,6 +112,7 @@
   }
 
   function persist() {
+    if (EMBED) return;
     Store.saveCurrent(state);
   }
 
@@ -734,13 +740,14 @@
 
   // Cada alteração é gravada no aparelho e, logo depois, enviada para a nuvem.
   function scheduleSave() {
+    if (EMBED) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, 400);
     renderSync();
   }
 
   function flushSave() {
-    if (!saveTimer) return;
+    if (EMBED || !saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
     Projects.put(state.id, (state.name || '').trim() || 'Sem nome', projectData());
@@ -1397,12 +1404,31 @@
     });
   }
 
-  renderInputs();
-  bind();
-  bindProjects();
-  bindApp();
-  renderAccount();
-  bindAccount();
-  calculate();
-  openSharedFromUrl();
+  if (EMBED) {
+    // Gera o mesmo PDF do botão "Baixar PDF" para o projeto recebido.
+    // Retorna { blob, name, stats, unplaced } (unplaced = peças que não couberam).
+    window.OtimizadorEmbed = {
+      async pdf(project) {
+        state = normalize({ ...project, id: 'embed' });
+        renderInputs();
+        lastResult = Optimizer.optimize(state);
+        steps.clear();
+        renderResults();
+        if (!lastResult.sheets.length) throw new Error('nenhuma peça coube nas chapas do projeto');
+        const pdf = await Pdf.build($('#results'), state);
+        return { ...pdf, stats: lastResult.stats, unplaced: lastResult.unplaced.reduce((t, u) => t + u.count, 0) };
+      },
+    };
+    renderInputs();
+    bind();
+  } else {
+    renderInputs();
+    bind();
+    bindProjects();
+    bindApp();
+    renderAccount();
+    bindAccount();
+    calculate();
+    openSharedFromUrl();
+  }
 })();

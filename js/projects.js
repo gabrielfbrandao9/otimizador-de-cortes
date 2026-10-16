@@ -202,7 +202,8 @@
     try { localStorage.removeItem(OLD_LIST); } catch (e) { /* nada */ }
   }
 
-  migrate();
+  // No modo embutido (?embed, usado pelo orcamento-marcenaria) nada é gravado.
+  if (!new URLSearchParams(location.search).has('embed')) migrate();
 
   const Projects = {
     uuid,

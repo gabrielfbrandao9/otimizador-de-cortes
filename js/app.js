@@ -405,7 +405,8 @@
   // Painel "Estatísticas por chapa", com navegação ‹ 1 / N ›
   let panelIndex = 0;
 
-  function panelStats(res, groups) {
+  // forPdf: título "Estatísticas da chapa N de M" (no PDF aparecem todas as chapas).
+  function panelStats(res, groups, forPdf) {
     const n = res.sheets.length;
     if (!n) return '';
     if (panelIndex >= n) panelIndex = 0;
@@ -425,7 +426,7 @@
 
     return `<details class="panel panel-sheet" data-key="panel-stats" open>
       <summary>
-        <span>Estatísticas por chapa</span>
+        <span>${forPdf ? `Estatísticas da chapa ${i + 1} de ${n}` : 'Estatísticas por chapa'}</span>
         <span class="pager no-print">
           <button type="button" class="pager-btn" data-panel="-1" aria-label="Chapa anterior"${n < 2 ? ' disabled' : ''}>‹</button>
           <span class="pager-label"><strong>${i + 1}</strong> / ${n}</span>
@@ -676,11 +677,23 @@
     }
   }
 
+  // Estatísticas de cada chapa (na tela só aparece a aba escolhida; no PDF, todas).
+  function allSheetStats() {
+    const groups = $('#results')._groups || [];
+    const keep = panelIndex;
+    const out = lastResult.sheets.map((_, i) => {
+      panelIndex = i;
+      return panelStats(lastResult, groups, true);
+    });
+    panelIndex = keep;
+    return out;
+  }
+
   // O PDF tem o mesmo visual do resultado na tela (como a antiga impressão).
   async function makePdf() {
     if (!lastResult || !lastResult.sheets.length) throw new Error('calcule o plano de corte primeiro');
     toast('Gerando o PDF…');
-    return Pdf.build($('#results'), state);
+    return Pdf.build($('#results'), state, { sheetStats: allSheetStats() });
   }
 
   function pdfError(err) {
@@ -1415,7 +1428,7 @@
         steps.clear();
         renderResults();
         if (!lastResult.sheets.length) throw new Error('nenhuma peça coube nas chapas do projeto');
-        const pdf = await Pdf.build($('#results'), state);
+        const pdf = await Pdf.build($('#results'), state, { sheetStats: allSheetStats() });
         return { ...pdf, stats: lastResult.stats, unplaced: lastResult.unplaced.reduce((t, u) => t + u.count, 0) };
       },
     };

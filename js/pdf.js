@@ -121,9 +121,11 @@
   /**
    * @param resultsEl  o elemento #results da tela
    * @param project    projeto (para o nome do arquivo e o rodapé)
+   * @param opts       { sheetStats: [html] } estatísticas de cada chapa, no lugar da aba da tela
    * @returns { blob, name }
    */
-  async function build(resultsEl, project) {
+  async function build(resultsEl, project, opts) {
+    opts = opts || {};
     await loadJsPdf();
     const frame = await makeFrame();
     try {
@@ -132,6 +134,13 @@
 
       // Cópia do resultado: sem botões, com tudo aberto e os desenhos como imagem.
       const copy = resultsEl.cloneNode(true);
+      // Estatísticas por chapa: na tela só a aba escolhida; no PDF, todas as chapas.
+      const panel = copy.querySelector('.panel-sheet');
+      if (panel && opts.sheetStats && opts.sheetStats.length) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = opts.sheetStats.join('');
+        panel.replaceWith(...tmp.children);
+      }
       copy.querySelectorAll('.no-print').forEach((n) => n.remove());
       copy.querySelectorAll('details').forEach((d) => { d.open = true; });
       const svgs = [...resultsEl.querySelectorAll('.svg-wrap svg')];

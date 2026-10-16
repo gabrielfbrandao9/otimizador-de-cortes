@@ -26,7 +26,6 @@
   const AUTO_CALC_LIMIT = 300; // acima disso o cálculo só roda pelo botão
 
   function defaultState() {
-    const e = (c1, c2, l1, l2) => ({ c1, c2, l1, l2 });
     return {
       name: 'Armário de cozinha',
       unit: 'mm',
@@ -35,7 +34,6 @@
       considerGrain: true,
       priority: 'waste',
       showLabels: true,
-      showEdges: true,
       showOffcuts: true,
       showOrder: false,
       zoom: 1,
@@ -44,12 +42,12 @@
       vertical: false,
       stocks: [{ id: uid(), name: 'MDF 18mm', length: 2750, width: 1840, qty: 5 }],
       pieces: [
-        { id: uid(), name: 'Lateral', length: 720, width: 550, qty: 2, grain: 'length', edges: e(true, false, false, false) },
-        { id: uid(), name: 'Base', length: 764, width: 550, qty: 2, grain: 'length', edges: e(true, false, false, false) },
-        { id: uid(), name: 'Prateleira', length: 762, width: 500, qty: 2, grain: 'length', edges: e(true, false, false, false) },
-        { id: uid(), name: 'Porta', length: 716, width: 397, qty: 4, grain: 'length', edges: e(true, true, true, true) },
-        { id: uid(), name: 'Travessa', length: 764, width: 100, qty: 4, grain: 'none', edges: e(false, false, false, false) },
-        { id: uid(), name: 'Gaveta frente', length: 396, width: 180, qty: 3, grain: 'length', edges: e(true, true, true, true) },
+        { id: uid(), name: 'Lateral', length: 720, width: 550, qty: 2, grain: 'length' },
+        { id: uid(), name: 'Base', length: 764, width: 550, qty: 2, grain: 'length' },
+        { id: uid(), name: 'Prateleira', length: 762, width: 500, qty: 2, grain: 'length' },
+        { id: uid(), name: 'Porta', length: 716, width: 397, qty: 4, grain: 'length' },
+        { id: uid(), name: 'Travessa', length: 764, width: 100, qty: 4, grain: 'none' },
+        { id: uid(), name: 'Gaveta frente', length: 396, width: 180, qty: 3, grain: 'length' },
       ],
     };
   }
@@ -64,10 +62,10 @@
       width: p.width ?? '',
       qty: p.qty ?? 1,
       grain: ['none', 'length', 'width'].includes(p.grain) ? p.grain : 'none',
-      edges: Object.assign({ c1: false, c2: false, l1: false, l2: false }, p.edges || {}),
       stock: typeof p.stock === 'string' ? p.stock : '',
       enabled: p.enabled !== false,
     }));
+    delete st.showEdges;
     st.stocks = (Array.isArray(st.stocks) ? st.stocks : []).map((x) => ({
       id: x.id || uid(),
       name: x.name || '',
@@ -154,9 +152,6 @@
 
   function pieceRow(p, i) {
     const c = Render.pieceColor(i);
-    const e = p.edges;
-    const edgeBtn = (k, label) =>
-      `<button type="button" class="edge e-${k}${e[k] ? ' on' : ''}" data-edge="${k}" aria-pressed="${e[k]}" title="${label}"></button>`;
     return `<tr data-id="${p.id}"${p.enabled ? '' : ' class="off"'}>
       <td class="c-on">${enabledBox(p, 'Usar esta peça no cálculo')}</td>
       <td class="c-n"><span class="swatch" style="background:${c.swatch}">${i + 1}</span></td>
@@ -172,12 +167,6 @@
         </select>
       </td>
       <td class="c-stock" data-label="Chapa">${stockSelect(p)}</td>
-      <td class="c-edge" data-label="Fita">
-        <div class="edgebox" role="group" aria-label="Fita de borda">
-          ${edgeBtn('c1', 'Comprimento 1 (cima)')}${edgeBtn('c2', 'Comprimento 2 (baixo)')}
-          ${edgeBtn('l1', 'Largura 1 (esquerda)')}${edgeBtn('l2', 'Largura 2 (direita)')}
-        </div>
-      </td>
       <td class="c-del"><button type="button" class="icon" data-act="del" aria-label="Remover peça">×</button></td>
     </tr>`;
   }
@@ -275,12 +264,6 @@
         state[list] = state[list].filter((x) => x !== item);
         if (list === 'stocks') state.pieces.forEach((p) => { if (p.stock === item.id) p.stock = ''; });
         changed({ rerender: true });
-      } else if (btn.dataset.edge) {
-        const k = btn.dataset.edge;
-        item.edges[k] = !item.edges[k];
-        btn.classList.toggle('on', item.edges[k]);
-        btn.setAttribute('aria-pressed', item.edges[k]);
-        changed();
       }
     });
     // Enter na última linha cria uma nova linha
@@ -308,7 +291,7 @@
     const prev = state.pieces[state.pieces.length - 1];
     state.pieces.push({
       id: uid(), name: '', length: '', width: '', qty: 1,
-      grain: 'none', edges: { c1: false, c2: false, l1: false, l2: false },
+      grain: 'none',
       stock: prev ? prev.stock : '',
       enabled: true,
     });
@@ -405,7 +388,6 @@
         ${row('Sobras', offcuts)}
         ${row('Cortes totais', st.cutCount)}
         ${row('Comprimento de corte total', `${fmt(st.cutLength / u.len)} ${u.lenU}`)}
-        ${row('Fita de borda', `${fmt(st.edgeLength / u.len)} ${u.lenU}`)}
         ${row('Espessura da serra', len(+state.kerf || 0))}
         ${row('Refilo', len(+state.trim || 0))}
         ${row('Veio', state.considerGrain ? 'Respeitado' : 'Ignorado')}
@@ -428,12 +410,6 @@
     const gi = groups.findIndex((g) => i >= g.first - 1 && i < g.first - 1 + g.count);
     const g = groups[gi];
 
-    let edge = 0;
-    for (const p of s.parts) {
-      const pc = state.pieces[p.piece] || {};
-      const e = pc.edges || {};
-      edge += ((e.c1 ? 1 : 0) + (e.c2 ? 1 : 0)) * (+pc.length || 0) + ((e.l1 ? 1 : 0) + (e.l2 ? 1 : 0)) * (+pc.width || 0);
-    }
     const offcuts = s.offcuts.length
       ? `${s.offcuts.length} <span class="muted">(${s.offcuts.map((o) => `${fmt(o.w)} × ${fmt(o.h)} ${unit()}`).join('; ')})</span>`
       : '0';
@@ -460,7 +436,6 @@
         ${row('Comprimento de corte', `${fmt(s.cutLength / u.len)} ${u.lenU}`)}
         ${row('Peças', s.parts.length)}
         ${row('Sobras', offcuts)}
-        ${row('Fita de borda', `${fmt(edge / u.len)} ${u.lenU}`)}
         ${same}
       </table>
     </details>`;
@@ -528,7 +503,6 @@
       + stat('Chapas usadas', st.sheetCount)
       + stat('Área de chapa', `${fmt(st.totalArea / u.area)} ${u.areaU}`, `peças ${fmt(st.usedArea / u.area)} ${u.areaU} · sobra ${fmt(st.wasteArea / u.area)} ${u.areaU}`)
       + stat('Cortes', st.cutCount, `${fmt(st.cutLength / u.len)} ${u.lenU} de corte`)
-      + stat('Fita de borda', `${fmt(st.edgeLength / u.len)} ${u.lenU}`)
       + '</div>';
 
     if (res.unplaced.length) {
@@ -547,7 +521,6 @@
     html += viewBar();
     html += `<div class="view-toggles no-print">
       <label class="check inline"><input type="checkbox" data-view="showLabels"${state.showLabels ? ' checked' : ''}><span>Nomes</span></label>
-      <label class="check inline"><input type="checkbox" data-view="showEdges"${state.showEdges ? ' checked' : ''}><span>Fita de borda</span></label>
       <label class="check inline"><input type="checkbox" data-view="showOffcuts"${state.showOffcuts ? ' checked' : ''}><span>Sobras</span></label>
       <label class="check inline"><input type="checkbox" data-view="showOrder"${state.showOrder ? ' checked' : ''}><span>Ordem dos cortes</span></label>
     </div>`;
@@ -587,7 +560,7 @@
 
   function viewOpts() {
     return {
-      showLabels: state.showLabels, showEdges: state.showEdges,
+      showLabels: state.showLabels,
       showOffcuts: state.showOffcuts, showOrder: state.showOrder,
       fontScale: state.fontScale, mono: state.mono, vertical: state.vertical, unit: unit(),
     };
@@ -1191,7 +1164,7 @@
       loadState({
         ...defaultState(),
         name: 'Novo projeto',
-        pieces: [{ id: uid(), name: '', length: '', width: '', qty: 1, grain: 'none', edges: {} }],
+        pieces: [{ id: uid(), name: '', length: '', width: '', qty: 1, grain: 'none' }],
       });
     });
     $('#btnSave').addEventListener('click', save);

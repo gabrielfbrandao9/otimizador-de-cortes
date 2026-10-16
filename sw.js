@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [
@@ -23,6 +23,7 @@ const APP_FILES = [
   'js/optimizer.js',
   'js/storage.js',
   'js/render.js',
+  'js/pdf.js',
   'js/app.js',
   'js/theme.js',
   'icons/icon-192.png',
@@ -34,6 +35,8 @@ const APP_FILES = [
 
 const CDN_FILES = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
   'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
 ];
 

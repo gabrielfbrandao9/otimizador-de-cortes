@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { Optimizer, Store, Render, Cloud, Projects } = window;
+  const { Optimizer, Store, Render, Cloud, Projects, Pdf } = window;
   const { fmt, esc } = Render;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -493,7 +493,11 @@
         <p class="muted">${st.partsPlaced} de ${st.partsTotal} peças · serra ${len(+state.kerf || 0)} · refilo ${len(+state.trim || 0)}</p>
       </div>
       <div class="results-actions no-print">
-        <button type="button" class="btn" id="btnPrint">Imprimir / PDF</button>
+        ${canShareFiles()
+          ? '<button type="button" class="btn primary" data-pdf="share">Enviar PDF</button>'
+          : '<button type="button" class="btn primary" data-pdf="download">Baixar PDF</button>'}
+        <button type="button" class="btn" data-pdf="open">Ver / imprimir</button>
+        ${canShareFiles() ? '<button type="button" class="btn" data-pdf="download">Baixar</button>' : ''}
         <button type="button" class="btn" id="btnPngAll">Baixar imagens</button>
       </div>
     </div>`;
@@ -654,6 +658,72 @@
     const g = $('#results')._groups[gi];
     const svg = Render.sheetSVG(g.sheet, state.pieces, { ...viewOpts(), key: 'png' + gi, step: steps.get(gi) || 0 });
     await Render.svgToPng(svg, `${slug(state.name)}-chapa-${g.first}.png`);
+  }
+
+  // ---------- PDF (como no orcamento-marcenaria) ----------
+
+  function canShareFiles() {
+    try {
+      return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'a.pdf', { type: 'application/pdf' })] }));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function makePdf() {
+    if (!lastResult || !lastResult.sheets.length) throw new Error('calcule o plano de corte primeiro');
+    const u = UNITS[state.unit];
+    return Pdf.build(state, lastResult, $('#results')._groups, {
+      view: viewOpts(),
+      unit: { label: u.label, len: u.len, lenU: u.lenU, area: u.area, areaU: u.areaU },
+      priority: PRIORITIES[state.priority],
+      steps,
+    });
+  }
+
+  function pdfError(err) {
+    toast('Não foi possível gerar o PDF: ' + err.message);
+  }
+
+  async function pdfOpen() {
+    const w = window.open('', '_blank'); // abre já, para o navegador não bloquear
+    try {
+      const { blob, name } = await makePdf();
+      const url = URL.createObjectURL(blob);
+      if (w) w.location.href = url;
+      else Store.download(name, blob);
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (err) {
+      if (w) w.close();
+      pdfError(err);
+    }
+  }
+
+  async function pdfDownload() {
+    try {
+      const { blob, name } = await makePdf();
+      Store.download(name, blob);
+      toast(`PDF salvo: ${name}`);
+    } catch (err) {
+      pdfError(err);
+    }
+  }
+
+  async function pdfShare() {
+    let pdf;
+    try {
+      pdf = await makePdf();
+      const file = new File([pdf.blob], pdf.name, { type: 'application/pdf' });
+      await navigator.share({ files: [file], title: pdf.name.replace(/\.pdf$/, '') });
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      if (pdf) {
+        Store.download(pdf.name, pdf.blob);
+        toast('Não deu para abrir o compartilhamento; o PDF foi baixado.');
+      } else {
+        pdfError(err);
+      }
+    }
   }
 
   // ---------- Projetos (salvamento automático) ----------
@@ -1322,7 +1392,9 @@
         results.querySelector(`.panel-sheet [data-panel="${btn.dataset.panel}"]`).focus();
       } else if (btn.dataset.goto) {
         results.querySelector(`.sheet[data-group="${btn.dataset.goto}"]`).scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (btn.id === 'btnPrint') window.print();
+      } else if (btn.dataset.pdf === 'open') pdfOpen();
+      else if (btn.dataset.pdf === 'download') pdfDownload();
+      else if (btn.dataset.pdf === 'share') pdfShare();
       else if (btn.id === 'btnPngAll') {
         for (let i = 0; i < results._groups.length; i++) await downloadPng(i);
       } else if (btn.dataset.png) downloadPng(+btn.dataset.png);

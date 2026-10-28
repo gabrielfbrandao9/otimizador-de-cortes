@@ -14,11 +14,13 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 - **Veio da madeira**: cada peça pode ser *livre* (pode girar), seguir o comprimento ou seguir a largura da chapa.
 - **Diagrama visual** com nomes, medidas, sobras e linhas de corte. Chapas iguais são agrupadas (×N).
 - **Visualização**: zoom, tamanho das letras, colorido ou sem cores, horizontal ou vertical e **ordem dos cortes** com passo a passo.
+- **Busca**: em "Meus projetos" (pelo nome) e na lista de peças, quando há muitas.
 - **Estatísticas**: aproveitamento, área usada e de sobra, número de cortes e metros de corte.
 - **Salvar e exportar**:
   - **salvamento automático** a cada alteração, sem botão "Salvar": grava no aparelho na hora e sobe para a nuvem logo depois;
   - **projetos na nuvem** com login por Google ou e-mail, sincronizados entre celular e computador: o app busca as mudanças de outros aparelhos ao abrir, ao voltar para ele e a cada 90 s (Supabase, opcional; veja [SUPABASE.md](SUPABASE.md));
   - funciona sem internet: as alterações ficam pendentes e sobem quando a conexão volta;
+  - **cópia de segurança** de todos os projetos num só `.json` (menu Arquivo ou "Meus projetos"); ao restaurar, entram os projetos que faltam ou que estão mais antigos no aparelho, e nenhum é apagado;
   - exportar e importar o projeto em `.json`;
   - exportar e importar a lista de peças em `.csv` (abre no Excel);
   - baixar cada chapa como imagem `.png`;

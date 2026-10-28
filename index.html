@@ -58,6 +58,9 @@
           <button type="button" data-file="export-csv">Exportar peças (.csv)</button>
           <button type="button" data-file="import-csv">Importar peças (.csv)</button>
           <hr>
+          <button type="button" data-file="backup">Cópia de segurança (todos os projetos)</button>
+          <button type="button" data-file="restore">Restaurar cópia de segurança</button>
+          <hr>
           <button type="button" data-file="example-wardrobe">Exemplo: guarda-roupa 4 portas e 4 gavetas</button>
           <div class="mobile-only" id="menuAccount" hidden></div>
         </div>
@@ -83,6 +86,7 @@
           <h2>Peças</h2>
           <span class="muted" id="piecesCount"></span>
         </div>
+        <input type="search" id="pieceSearch" class="list-search" placeholder="Buscar peça pelo nome" aria-label="Buscar peça pelo nome" autocomplete="off" hidden>
         <div class="table-wrap">
           <table class="grid pieces">
             <thead>
@@ -192,7 +196,12 @@
         <button class="icon" value="close" aria-label="Fechar">×</button>
       </div>
       <p class="muted dlg-text" id="projectsNote"></p>
+      <input type="search" id="projectSearch" class="list-search" placeholder="Buscar projeto" aria-label="Buscar projeto" autocomplete="off" hidden>
       <ul id="projectList" class="project-list"></ul>
+      <div class="backup-row">
+        <button type="button" class="btn ghost" data-act="backup">Baixar cópia de todos</button>
+        <button type="button" class="btn ghost" data-act="restore">Restaurar cópia</button>
+      </div>
     </form>
   </dialog>
 

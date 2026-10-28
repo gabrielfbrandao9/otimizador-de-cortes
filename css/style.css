@@ -573,6 +573,11 @@ dialog::backdrop { background: rgba(20, 15, 10, 0.4); }
 .dlg { padding: 16px 18px 18px; }
 .dlg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .dlg-head h2 { font-size: 17px; }
+.list-search { width: 100%; margin: 0 0 10px; padding: 8px 10px; font: inherit; font-size: 14px; color: inherit;
+  background: var(--input-bg, transparent); border: 1px solid var(--line); border-radius: 8px; }
+.list-search[hidden], .grid tr.hide { display: none !important; }
+.backup-row { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.backup-row .btn { font-size: 13px; }
 .project-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; }
 .project-list li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
 .project-list li > div { flex: 1; min-width: 0; }

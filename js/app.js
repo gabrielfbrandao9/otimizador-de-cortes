@@ -200,8 +200,21 @@
     </tr>`;
   }
 
+  // Busca de peças: só esconde as linhas, a lista continua inteira no projeto.
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  function filterPieces() {
+    const box = $('#pieceSearch');
+    box.hidden = state.pieces.length < 6 && !box.value;
+    const q = norm(box.value);
+    $$('#piecesBody tr').forEach((tr, i) => {
+      const p = state.pieces[i];
+      tr.classList.toggle('hide', !!q && !!p && !norm(p.name || `Peça ${i + 1}`).includes(q));
+    });
+  }
+
   function renderPieces() {
     $('#piecesBody').innerHTML = state.pieces.map(pieceRow).join('');
+    filterPieces();
     // Com uma chapa só não há o que escolher: esconde a coluna.
     $('.grid.pieces').classList.toggle('one-stock', state.stocks.length < 2);
     syncAllBox('#allPieces', state.pieces);
@@ -294,6 +307,7 @@
   }
 
   function addPiece() {
+    $('#pieceSearch').value = ''; // a peça nova precisa aparecer
     const prev = state.pieces[state.pieces.length - 1];
     state.pieces.push({
       id: uid(), name: '', length: '', width: '', qty: 1,
@@ -850,11 +864,19 @@
         : 'Salvos automaticamente neste aparelho. <button type="button" class="link" data-act="login">Entre na sua conta</button> para guardar na nuvem e abrir em outros aparelhos.';
     $('#projectsNote').innerHTML = note;
     const ul = $('#projectList');
+    const search = $('#projectSearch');
+    search.hidden = list.length < 6 && !search.value;
     if (!list.length) {
       ul.innerHTML = '<li class="muted">Nenhum projeto ainda. Eles aparecem aqui assim que você começa a editar.</li>';
       return;
     }
-    ul.innerHTML = list.map((p) => {
+    const q = norm(search.value);
+    const shown = q ? list.filter((p) => norm(p.name).includes(q)) : list;
+    if (!shown.length) {
+      ul.innerHTML = `<li class="muted">Nenhum projeto com “${esc(search.value.trim())}”.</li>`;
+      return;
+    }
+    ul.innerHTML = shown.map((p) => {
       const current = p.id === state.id;
       const where = !user ? '' : p.nuvem && !p.pendente ? ' · ☁ na nuvem' : ' · enviando…';
       return `<li${current ? ' class="current"' : ''}>
@@ -876,7 +898,10 @@
     const btn = e.target.closest('button');
     if (!btn) return;
     const d = btn.dataset;
-    if (d.open) {
+    if (d.act === 'backup' || d.act === 'restore') {
+      e.preventDefault();
+      fileAction(d.act);
+    } else if (d.open) {
       $('#dlgProjects').close();
       openProject(d.open);
     } else if (d.del) {
@@ -1248,9 +1273,54 @@
     });
   }
 
+  // Cópia de segurança: todos os projetos (deste aparelho e, com login, da nuvem) num .json.
+  function backupAll() {
+    flushSave();
+    const projetos = Projects.list().map((p) => {
+      const { name, ...data } = Projects.get(p.id) || {};
+      return { id: p.id, name: p.name, alterado_em: p.alterado_em, data };
+    });
+    if (!projetos.length) return toast('Ainda não há projetos para copiar.');
+    const copia = { app: 'otimizador-de-cortes', tipo: 'copia-de-seguranca', versao: 1, criadaEm: new Date().toISOString(), projetos };
+    Store.download(`otimizador-copia-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(copia, null, 2), 'application/json');
+    toast(`Cópia baixada (${projetos.length} projeto${projetos.length > 1 ? 's' : ''})`);
+  }
+
+  // Restaura uma cópia: traz de volta os projetos que faltam ou que estão mais antigos aqui.
+  // Não apaga nenhum projeto que já existe.
+  async function restoreBackup() {
+    const f = await pickFile('.json,application/json');
+    if (!f) return;
+    const copia = JSON.parse(await Store.readFile(f));
+    let itens;
+    if (copia && Array.isArray(copia.projetos)) itens = copia.projetos;
+    else if (copia && Array.isArray(copia.pieces)) return openAsNew(copia, `Projeto “${copia.name || 'importado'}” importado`);
+    else throw new Error('arquivo não parece ser uma cópia do Otimizador');
+    itens = itens.filter((p) => p && p.id && p.data && Array.isArray(p.data.pieces));
+    const atuais = new Map(Projects.list().map((p) => [p.id, p]));
+    const novos = itens.filter((p) => !atuais.has(p.id));
+    const maisNovos = itens.filter((p) => atuais.has(p.id) && (+p.alterado_em || 0) > atuais.get(p.id).alterado_em);
+    const iguais = itens.length - novos.length - maisNovos.length;
+    if (!novos.length && !maisNovos.length) return toast('Todos os projetos da cópia já estão aqui, iguais ou mais novos.');
+    const quando = copia.criadaEm ? ` de ${new Date(copia.criadaEm).toLocaleDateString('pt-BR')}` : '';
+    const partes = [];
+    if (novos.length) partes.push(`${novos.length} projeto${novos.length > 1 ? 's' : ''} que não ${novos.length > 1 ? 'estão' : 'está'} aqui`);
+    if (maisNovos.length) partes.push(`${maisNovos.length} mais recente${maisNovos.length > 1 ? 's' : ''} na cópia (substitui${maisNovos.length > 1 ? 'em' : ''} o daqui)`);
+    if (!confirm(`Restaurar a cópia${quando}?\n\nVão entrar: ${partes.join(' e ')}.${iguais ? `\n${iguais} já ${iguais > 1 ? 'estão' : 'está'} aqui e ${iguais > 1 ? 'ficam' : 'fica'} como ${iguais > 1 ? 'estão' : 'está'}.` : ''}\nNenhum projeto é apagado.`)) return;
+    flushSave();
+    [...novos, ...maisNovos].forEach((p) => Projects.put(p.id, p.name, p.data));
+    if (maisNovos.some((p) => p.id === state.id)) loadState({ ...Projects.get(state.id), id: state.id });
+    if ($('#dlgProjects').open) renderProjectList();
+    toast(`${novos.length + maisNovos.length} projeto${novos.length + maisNovos.length > 1 ? 's' : ''} restaurado${novos.length + maisNovos.length > 1 ? 's' : ''}`);
+  }
+
   async function fileAction(kind) {
     try {
-      if (kind === 'export-json') {
+      if (kind === 'backup') {
+        backupAll();
+      } else if (kind === 'restore') {
+        await restoreBackup();
+      } else if (kind === 'export-json') {
         Store.download(`${slug(state.name)}.json`, JSON.stringify(projectData(), null, 2), 'application/json');
       } else if (kind === 'export-csv') {
         Store.download(`${slug(state.name)}-pecas.csv`, Store.piecesToCSV(state.pieces, state.stocks), 'text/csv;charset=utf-8');
@@ -1344,6 +1414,8 @@
     });
     window.addEventListener('hashchange', openSharedFromUrl);
     $('#dlgProjects').addEventListener('click', onProjectsClick);
+    $('#projectSearch').addEventListener('input', renderProjectList);
+    $('#pieceSearch').addEventListener('input', filterPieces);
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();

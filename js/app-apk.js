@@ -5,6 +5,10 @@
  * recarregam a página para trazer as novidades do site.
  * Na tag <script>: data-repo (repositório no GitHub) e data-apk (nome do arquivo na Release).
  * O valor de data-app-apk, se houver, é o texto do botão dentro do app.
+ *
+ * Dentro do app, link para a página inicial de outro site abre o app dele. Se não estiver
+ * instalado, oferece baixar. Usa o endereço de retorno do login que todo app já responde,
+ * por isso funciona sem APK novo.
  */
 (function () {
   'use strict';
@@ -62,6 +66,63 @@
       botao.textContent = texto;
     }
   }
+
+  // ---------- Abrir o app de outro site ----------
+
+  const APPS = {
+    'biblioteca-de-jogos': { id: 'jogos', nome: 'Jogos', apk: 'BibliotecaDeJogos.apk' },
+    'calculadora-racao': { id: 'racao', nome: 'Ração', apk: 'CalculadoraRacao.apk' },
+    'cobrinha-neon': { id: 'cobrinha', nome: 'Cobrinha', apk: 'CobrinhaNeon.apk' },
+    'controle-financas': { id: 'financas', nome: 'Finanças', apk: 'MinhasFinancas.apk' },
+    'controle-porcos': { id: 'porcos', nome: 'Porcos', apk: 'ControlePorcos.apk' },
+    'orcamento-marcenaria': { id: 'orcamentos', nome: 'Orçamentos', apk: 'OrcamentoMarcenaria.apk' },
+    'otimizador-de-cortes': { id: 'cortes', nome: 'Cortes', apk: 'OtimizadorDeCortes.apk' },
+  };
+
+  function appDoLink(link) {
+    let u;
+    try { u = new URL(link.href); } catch (e) { return null; }
+    if (u.origin !== 'https://gabrielfbrandao9.github.io' || u.search || u.hash) return null;
+    const repo = (u.pathname.match(/^\/([^/]+)\/?$/) || [])[1];
+    if (!repo || repo === script.dataset.repo || !APPS[repo]) return null;
+    return Object.assign({ repo }, APPS[repo]);
+  }
+
+  function abrirOutroApp(app) {
+    let saiu = false;
+    const marcar = () => { saiu = true; };
+    window.addEventListener('blur', marcar);
+    window.addEventListener('pagehide', marcar);
+    document.addEventListener('visibilitychange', marcar);
+
+    const link = document.createElement('a');
+    link.href = `com.gabrielfbrandao.${app.id}://login`;
+    link.click();
+
+    // Se o outro app abriu, este sai da frente; se continuou aqui, ele não está instalado
+    setTimeout(() => {
+      window.removeEventListener('blur', marcar);
+      window.removeEventListener('pagehide', marcar);
+      document.removeEventListener('visibilitychange', marcar);
+      if (saiu || document.visibilityState !== 'visible') return;
+      if (confirm(`O app ${app.nome} não está instalado neste celular.\n\nBaixar agora?`)) {
+        A.abrirNavegador(`https://github.com/gabrielfbrandao9/${app.repo}/releases/latest/download/${app.apk}`);
+      }
+    }, 1800);
+  }
+
+  if (noApp) {
+    document.addEventListener('click', (e) => {
+      const link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      const app = link && appDoLink(link);
+      if (!app) return;
+      e.preventDefault();
+      e.stopPropagation();
+      abrirOutroApp(app);
+    }, true);
+  }
+
+  // ---------- Botão do app ----------
 
   document.addEventListener('click', (e) => {
     const botao = e.target && e.target.closest ? e.target.closest('[data-app-apk]') : null;

@@ -1,2 +1,4 @@
 # Credenciais do Google OAuth: NUNCA enviar ao GitHub
 client_secret*.json
+android/build/
+dist/

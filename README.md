@@ -106,3 +106,20 @@ supabase/schema.sql tabela e regras de segurança do banco
 
 - O plano é uma boa solução, não necessariamente a ótima matemática (o problema é NP-difícil).
 - Acima de 300 peças o cálculo deixa de ser automático a cada alteração: use o botão **Calcular**.
+
+## App Android (.apk)
+
+**Baixar:** <https://github.com/gabrielfbrandao9/otimizador-de-cortes/releases/latest/download/OtimizadorDeCortes.apk>
+
+`android/` tem um app mínimo em Java: um WebView que abre o site publicado e guarda uma cópia para usar
+sem internet. O site não muda nada: `android/shim.js` entra em cada página dentro do app e faz funcionar
+o que o WebView não tem (baixar, abrir e compartilhar arquivos, login com Google pelo navegador, botão voltar).
+
+- **Telas e funções:** chegam sozinhas. Basta publicar o site (`git push`) e na próxima abertura do app está lá.
+- **Parte Android:** precisa de APK novo. O app avisa quando há Release mais nova.
+
+Gerar o APK (Git Bash, na pasta do projeto): `bash android/build-apk.sh`. Sai em `dist/OtimizadorDeCortes.apk`.
+Para uma versão nova, aumente os dois números em `android/versao.txt`.
+
+A chave de assinatura fica fora do Git, em `Documents\Claude Code\apk-chaves` (`com.gabrielfbrandao.cortes.*`).
+**Guarde essa pasta:** sem ela, versões novas não instalam por cima da antiga.

@@ -28,12 +28,14 @@ Funciona no navegador, sem servidor nem cadastro. É só HTML, CSS e JavaScript.
 
 ## Aplicativo para Android
 
-O site é também um **aplicativo instalável (PWA)**:
+O site também tem **aplicativo para Android**:
 
-1. No celular Android, abra o site no **Chrome**.
-2. Toque em **Instalar app** (no topo da página) ou no menu ⋮ → **Instalar app** / **Adicionar à tela inicial**.
+1. No celular Android, abra o site e toque em **Instalar app**, no topo da página ou no menu ⋮. O botão baixa o APK.
+2. Toque no arquivo baixado para instalar.
 3. O ícone **Cortes** aparece na tela inicial. O app abre em tela cheia, com abas
    (Peças · Chapas · Opções · Plano) e **funciona sem internet** depois da primeira abertura.
+
+Dentro do app, o mesmo botão vira **Atualizar** e procura uma versão nova (`js/app-apk.js`).
 
 Atualizações chegam sozinhas: a cada `git push`, o app pega a versão nova na próxima vez que abrir com internet.
 O login e os projetos na nuvem precisam de conexão; o resto funciona offline.

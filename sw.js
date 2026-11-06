@@ -8,7 +8,7 @@
  *
  * Ao mudar a lista de arquivos, aumente a versão para limpar o cache antigo.
  */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const CACHE = `cortes-${VERSION}`;
 
 const APP_FILES = [
@@ -25,6 +25,7 @@ const APP_FILES = [
   'js/render.js',
   'js/pdf.js',
   'js/app.js',
+  'js/app-apk.js',
   'js/theme.js',
   'icons/icon-192.png',
   'icons/icon-512.png',

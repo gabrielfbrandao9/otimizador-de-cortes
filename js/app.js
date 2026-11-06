@@ -1025,8 +1025,6 @@
     badge.textContent = res.unplaced.length ? '!' : `${Math.round(res.stats.efficiency * 100)}%`;
   }
 
-  let installPrompt = null;
-
   function bindApp() {
     let saved = null;
     try { saved = sessionStorage.getItem('otimizador:aba'); } catch (e) { /* sem armazenamento */ }
@@ -1042,27 +1040,6 @@
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }
-
-    // Botão "Instalar app" (Android/Chrome)
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      installPrompt = e;
-      $('#btnInstall').hidden = false;
-      $('#menuInstall').hidden = false;
-    });
-    $('#btnInstall').addEventListener('click', async () => {
-      if (!installPrompt) return;
-      installPrompt.prompt();
-      await installPrompt.userChoice.catch(() => null);
-      installPrompt = null;
-      $('#btnInstall').hidden = true;
-      $('#menuInstall').hidden = true;
-    });
-    window.addEventListener('appinstalled', () => {
-      $('#btnInstall').hidden = true;
-      $('#menuInstall').hidden = true;
-      toast('App instalado! Procure “Cortes” na tela inicial.');
-    });
 
     // Aviso de "sem internet"
     const net = () => {
@@ -1432,7 +1409,6 @@
       else if (btn.dataset.menu === 'new') newProject();
       else if (btn.dataset.menu === 'open') openProjects();
       else if (btn.dataset.menu === 'share') openShare();
-      else if (btn.dataset.menu === 'install') $('#btnInstall').click();
     });
     document.addEventListener('click', (e) => {
       if (dropdown.open && !dropdown.contains(e.target)) dropdown.open = false;
